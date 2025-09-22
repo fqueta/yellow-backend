@@ -18,11 +18,11 @@ class PermissionService
         $campo = 'can_' . $action; // can_view, can_create, can_edit, can_delete, can_upload
         // se no seu caso for hasOne ou belongsTo, só trocar.
         $get_id_menu_by_url = $this->get_id_menu_by_url($routeName);
-        //  dd($get_id_menu_by_url,$groupIds,$action);
         $perm = MenuPermission::where('permission_id', $groupIds)
                 ->where('menu_id', $get_id_menu_by_url)
                 //   ->where($campo,1)
                 ->first();
+                // dd($perm);
         if (!$perm) {
             return false;
         }
@@ -38,6 +38,7 @@ class PermissionService
     public function get_id_menu_by_url($rm){
         $url = $this->get_url_by_route($rm);
         $menu_exist = Menu::where('url',$url)->first();
+        // dd($menu_exist);
         if($menu_exist){
             return $menu_exist->id;
         }else{

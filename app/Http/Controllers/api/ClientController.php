@@ -326,8 +326,12 @@ class ClientController extends Controller
         $permissionCheck = $this->checkPermissions('create');
         if ($permissionCheck) return $permissionCheck;
 
-        //
-        // Verificar se cliente já existe na lixeira
+        // Se for requisição PUT, processar apenas pontos
+        if ($request->isMethod('PUT')) {
+            return $this->processPointsOnly($request);
+        }
+
+        // Verificar se cliente já existe na lixeira (apenas para POST)
         $trashCheck = $this->checkClientInTrash($request);
         if ($trashCheck) return $trashCheck;
 
@@ -672,23 +676,35 @@ class ClientController extends Controller
     /**
      * Inativar um cliente específico
      */
-    public function inactivate(Request $request, string $id)
+    public function inativar(Request $request, string $cpf)
     {
         $user = $request->user();
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('edit')) {
+        if (!$this->permissionService->isHasPermission('delete')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
 
-        $client = Client::findOrFail($id);
-
+        $client = Client::where('cpf',$cpf)->first();
+        if (!$client) {
+            return response()->json([
+                'exec'=>false,
+                'message' => 'Cliente não encontrado',
+                'status' => 404
+            ]);
+        }
         $client->update([
             'ativo' => 'n',
             'status' => 'inactived',
+            'excluido' => 's',
+            'reg_deletado' => json_encode([
+                'usuario' => $user->id,
+                'nome' => $user->name,
+                'created_at' => now(),
+            ])
         ]);
-        $client = Client::where('cpf',$client->cpf)->first();
+
         if(!$client){
             return response()->json([
                 'exec'=>false,
@@ -696,17 +712,18 @@ class ClientController extends Controller
                 'status' => 404
             ]);
         }
-        if($client->status != 'actived'){
-            return response()->json([
-                'exec'=>false,
-                'message' => 'Cliente não está ativo',
-                'status' => 400
-            ]);
-        }
+        // dd($client);
+        // if($client->status != 'actived'){
+        //     return response()->json([
+        //         'exec'=>false,
+        //         'message' => 'Cliente não está ativo',
+        //         'status' => 400
+        //     ]);
+        // }
         //Verifica que ele está na aloyal
         //solicitar inativação na aloyal
         $aloyal = (new AlloyalController)->destroy($client->cpf);
-        dump($aloyal);
+        // dump($aloyal);
         if($aloyal['exec']){
             // Mover para lixeira em vez de excluir permanentemente
             $client->update([
@@ -719,7 +736,7 @@ class ClientController extends Controller
                 ])
             ]);
         }
-        if($client->deletado == 's'){
+        if($client->excluido == 's'){
             return response()->json([
                 'exec' => true,
                 'message' => 'Cliente inativado com sucesso',
