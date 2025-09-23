@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\MenuController;
+use App\Services\Qlib;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -50,19 +51,28 @@ class AuthController extends Controller
         // Lista de permissões do grupo
         // $allowedPermissions = json_decode($group->id_menu, true) ?? [];
         // Menu base (estrutura completa)
-        $menu = $this->getMenuStructure();
-
+        // $menu = $this->getMenuStructure();
         // Filtra o menu conforme as permissões do grupo
         // $filteredMenu = $this->filterMenuByPermissions($menu, $allowedPermissions);
         $filteredMenu = (new MenuController)->getMenus($pid);
         $token = $user->createToken('developer')->plainTextToken;
-        return response()->json([
-            'user' => $user,
-            // 'permissions' => $allowedPermissions,
-            'token' => $token,
-            'menu' => $filteredMenu,
-            'redirect' => $group->redirect_login ?? '/home',
-        ]);
+        if($pid>=Qlib::qoption('permission_partner_id')){
+            return response()->json([
+                'user' => ['id'=>$user->id,'email'=>$user->email,'name'=>$user->name],
+                // 'permissions' => $allowedPermissions,
+                'token' => $token,
+                // 'menu' => $filteredMenu,
+                // 'redirect' => $group->redirect_login ?? '/home',
+            ]);
+        }else{
+            return response()->json([
+                'user' => $user,
+                // 'permissions' => $allowedPermissions,
+                'token' => $token,
+                'menu' => $filteredMenu,
+                'redirect' => $group->redirect_login ?? '/home',
+            ]);
+        }
     }
 
     /**
