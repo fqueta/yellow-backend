@@ -393,7 +393,7 @@ class ClientController extends Controller
         $clientCheck = Client::where('cpf', $request->cpf)->first();
         if($clientCheck){
             return response()->json([
-                'message' => 'Erro de validação',
+                'message' => 'CPF já existe',
                 'errors'  => ['cpf' => ['CPF já existe']],
             ], 422);
         }
