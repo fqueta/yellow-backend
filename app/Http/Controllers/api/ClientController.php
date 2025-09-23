@@ -376,7 +376,7 @@ class ClientController extends Controller
         if ($request->isMethod('PUT')) {
             return $this->processPointsOnly($request);
         }
-
+        $cpf = str_replace(['.','-'],'',$request->cpf);
         // Verificar se cliente já existe na lixeira (apenas para POST)
         $trashCheck = $this->checkClientInTrash($request);
         if ($trashCheck) return $trashCheck;
@@ -387,8 +387,16 @@ class ClientController extends Controller
             'genero' => $request->get('genero') ? $request->get('genero') : 'ni',
             'name' => $request->get('name') ? $request->get('name') : 'Pre cadastro '.$request->get('cpf'),
             'status' => 'pre_registred',
+            'cpf' => $cpf,
         ]);
-
+        //verifica se o CPF ja Existe
+        $clientCheck = Client::where('cpf', $request->cpf)->first();
+        if($clientCheck){
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors'  => ['cpf' => ['CPF já existe']],
+            ], 422);
+        }
         // Validação específica para pré-cadastro
         $validator = Validator::make($request->all(), [
             'tipo_pessoa'   => ['required', Rule::in(['pf','pj'])],
