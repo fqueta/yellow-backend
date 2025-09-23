@@ -79,12 +79,13 @@ class AlloyalController extends Controller
                 return $ret;
             }else{
                 //lançar baixa do credito
-                $baixa = (new PointController)->createOrUpdate([
+                $baixar = (new PointController)->createOrUpdate([
                     'client_id' => $client_id,
                     'tipo' => 'debito',
-                    'valor' => $data['amount']*-1,
+                    'valor' => (int)$data['amount']*(-1),
                     'description' => $data['description'],
                 ]);
+                $ret['baixar'] = $baixar;
                 $ret['message'] = 'Depósito realizado com sucesso, status: ' . $response->status();
             }
             return $ret;
@@ -126,12 +127,14 @@ class AlloyalController extends Controller
             $data = $response->json();
             $ret['data'] = $data;
             $ret['message'] = 'Usuário criado com sucesso, status: ' . $response->status();
+            if(!$client_id){
+                $client_id = Client::where('cpf',$d_send['cpf'])->value('id');
+            }
             if($client_id){
                 $ret['message'] .= ', ID: ' . $client_id;
                 $ret['client_id'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
                 //depositar na carteira
                 $ret['message'] .= ', ID do usuário: ' . $client_id;
-                // dd($data);
                 if(isset($data['cpf'])){
                     $ret['data']['deposit'] = $this->fazer_deposito(['cpf'=>$data['cpf'],'client_id'=>$client_id,'description'=>'Depósito via API']);
                 }
@@ -163,7 +166,6 @@ class AlloyalController extends Controller
         }
         $pc = new PointController();
         $points = $pc->saldo($client_id);
-        // $ponts = Qlib::get_usermeta($client_id,'points',true);
 
         if(!empty($points) && $points == null){
             return ['exec'=>false,'message'=>'Saldo de pontos '.$points.' insuficiente'];
@@ -182,8 +184,10 @@ class AlloyalController extends Controller
         // dd($data,$ponts,$multinplicador);
         $ret = $this->deposit($data,$idendificador);
         if($ret['exec'] && $amount){
+            // dump($client_id,$amount);
             $ret['data']['debito'] = $this->debitar($client_id,$amount);
         }
+        // dd($ret);
         return $ret;
     }
     public function debitar($client_id,$valor){

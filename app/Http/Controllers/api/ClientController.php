@@ -198,7 +198,9 @@ class ClientController extends Controller
         if(isset($validated['password'])){
             $validated['password'] = Hash::make($validated['password']);
         }
-
+        if(isset($validated['cpf'])){
+            $validated['cpf'] = str_replace(['.','-'],'',$validated['cpf']);
+        }
         $validated['ativo'] = isset($validated['ativo']) ? $validated['ativo'] : 's';
         $validated['status'] = $status;
         $validated['tipo_pessoa'] = isset($validated['tipo_pessoa']) ? $validated['tipo_pessoa'] : 'pf';
@@ -231,7 +233,8 @@ class ClientController extends Controller
         }
 
         // Buscar cliente pelo CPF
-        $client = Client::where('cpf', $request->cpf)->first();
+        $cpf = str_replace(['.','-'],'',$request->cpf);
+        $client = Client::where('cpf', $cpf)->first();
 
         if (!$client) {
             return response()->json([
@@ -253,12 +256,18 @@ class ClientController extends Controller
             ];
 
             $savePoints = $pc->createOrUpdate($data);
-            $identificador = $savePoints['id'] ?? 0;
+            $identificador = uniqid();//$savePoints['id'] ?? 0;
 
             $ret['identificador'] = Qlib::update_usermeta($client->id,'id_points',$identificador);
             $ret['points'] = $savePoints;
 
             if($savePoints){
+                //enviar deposito para alloyal
+                $ret['deposit'] = (new AlloyalController)->fazer_deposito([
+                    'cpf'=>$client->cpf,
+                    'client_id'=>$client->id,
+                    'description'=>'Depósito via API'
+                ]);
                 $link_active_cad = Qlib::qoption('link_active_cad');
                 $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
                 $ret['link_active_cad'] = $link_active_cad;
@@ -288,7 +297,7 @@ class ClientController extends Controller
             ];
 
             $savePoints = $pc->createOrUpdate($data);
-            $identificador = $savePoints['id'] ?? 0;
+            $identificador = uniqid();//$savePoints['id'] ?? 0;
 
             $ret['identificador'] = Qlib::update_usermeta($client->id,'id_points',$identificador);
             $ret['points'] = $savePoints;
@@ -444,9 +453,12 @@ class ClientController extends Controller
     }
     public function store_active(Request $request)
     {
-        $client = Client::where('cpf', $request->cpf)->first();
+        $cpf = str_replace(['.','-'],'',$request->cpf);
+        $request->merge(['cpf' => $cpf]);
+        $client = Client::where('cpf', $cpf)->first();
+        // dd($request->all());
         if (!$client) {
-            return response()->json(['error' => 'Cliente não encontrado'], 404);
+            return response()->json(['error' => 'Cliente não encontrado ou invalido'], 404);
         }
         // if($client->status == 'actived'){
         //     return response()->json(['message' => 'Cliente já está cadastrado e ativado'], 422);
