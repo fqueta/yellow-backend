@@ -235,7 +235,7 @@ class ClientController extends Controller
         // Buscar cliente pelo CPF
         $cpf = str_replace(['.','-'],'',$request->cpf);
         $client = Client::where('cpf', $cpf)->first();
-
+        // dd($client,$cpf);
         if (!$client) {
             return response()->json([
                 'message' => 'Cliente não encontrado',

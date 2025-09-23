@@ -13,7 +13,7 @@ class Client extends User
     // Sempre traz só usuários com permission_id = 5
     protected static function booted()
     {
-        $cliente_permission_id = Qlib::qoption('cliente_permission_id')??5;
+        $cliente_permission_id = Qlib::qoption('permission_client_id')??6;
         static::creating(function ($client) use ($cliente_permission_id) {
             $client->permission_id = $cliente_permission_id; // força sempre grupo cliente
         });
