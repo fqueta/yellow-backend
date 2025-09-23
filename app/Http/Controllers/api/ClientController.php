@@ -85,10 +85,13 @@ class ClientController extends Controller
             }
             return $client;
         });
-        $ret = $clients->getCollection()->map(function ($client) {
-            return $this->map_client($client);
-        });
-        return response()->json($ret);
+        if($request->segment(4) == 'registred'){
+            $ret = $clients->getCollection()->map(function ($client) {
+                return $this->map_client($client);
+            });
+            return $ret;
+        }
+        return response()->json($clients);
     }
     public function map_client($client)
     {
@@ -366,7 +369,9 @@ class ClientController extends Controller
 
         // Se for requisição PUT, processar apenas pontos
         if ($request->isMethod('GET')) {
-            return $this->index($request);
+            $clients = $this->index($request);
+
+            return response()->json($clients);
         }
         if ($request->isMethod('PUT')) {
             return $this->processPointsOnly($request);

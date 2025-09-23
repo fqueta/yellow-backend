@@ -5,13 +5,20 @@
 
     RewriteEngine On
 
-    # Handle CORS - Verificar se mod_headers está habilitado
+    # Handle CORS - Configuração específica para produção
     <IfModule mod_headers.c>
-        Header always set Access-Control-Allow-Origin "*"
+        # Definir origens permitidas específicas
+        SetEnvIf Origin "^https?://(api-clubeyellow\.maisaqui\.com\.br|clubeyellow\.maisaqui\.com\.br|localhost:8080|127\.0\.0\.1:8080)$" CORS_ALLOW_ORIGIN=$0
+
+        Header always set Access-Control-Allow-Origin "%{CORS_ALLOW_ORIGIN}e" env=CORS_ALLOW_ORIGIN
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
         Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-TOKEN"
         Header always set Access-Control-Allow-Credentials "true"
         Header always set Access-Control-Max-Age "3600"
+
+        # Para origens não permitidas, não definir credenciais
+        Header always set Access-Control-Allow-Origin "*" "expr=!%{CORS_ALLOW_ORIGIN}"
+        Header always unset Access-Control-Allow-Credentials "expr=!%{CORS_ALLOW_ORIGIN}"
     </IfModule>
 
     # Handle preflight OPTIONS requests
@@ -32,12 +39,11 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
     # permissões da API
-    <LimitExcept GET POST PUT DELETE>
+    <LimitExcept GET POST PUT DELETE OPTIONS>
         Deny from all
     </LimitExcept>
 
-    <Limit GET POST DELETE>
+    <Limit GET POST DELETE OPTIONS>
         Require all granted
     </Limit>
-
 </IfModule>
