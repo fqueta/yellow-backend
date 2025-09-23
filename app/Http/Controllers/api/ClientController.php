@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use function PHPUnit\Framework\isArray;
+use App\Http\Controllers\api\PointController;
 
 class ClientController extends Controller
 {
