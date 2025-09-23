@@ -97,6 +97,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
             'users' => 'id'
         ]]);
         // registro cliente mileto
+        Route::get('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.index_pre_registred');
         Route::post('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.pre_registred');
         Route::put('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.update_pre_registred');
         Route::delete('clients/registred/{cpf}', [ClientController::class, 'inativar'])->name('clients.inativar');

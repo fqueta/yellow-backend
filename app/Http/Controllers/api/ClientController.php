@@ -57,6 +57,9 @@ class ClientController extends Controller
             $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
         });
 
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
         if ($request->filled('email')) {
             $query->where('email', 'like', '%' . $request->input('email') . '%');
         }
@@ -82,10 +85,29 @@ class ClientController extends Controller
             }
             return $client;
         });
-
-        return response()->json($clients);
+        $ret = $clients->getCollection()->map(function ($client) {
+            return $this->map_client($client);
+        });
+        return response()->json($ret);
     }
-
+    public function map_client($client)
+    {
+        if(is_array($client)){
+            $client = (object)$client;
+        }
+        // $pc = new PointController();
+        // $points = $pc->saldo($client->id);
+        return [
+            'id' => $client->id,
+            'name' => $client->name,
+            'cpf' => $client->cpf,
+            'email' => $client->email,
+            'status' => $client->status,
+            // 'saldo' => Qlib::get_usermeta($client->id,'saldo'),
+            'created_at' => $client->created_at,
+            'updated_at' => $client->updated_at,
+        ];
+    }
     /**
      * Sanitiza os dados de entrada
      */
@@ -263,11 +285,11 @@ class ClientController extends Controller
 
             if($savePoints){
                 //enviar deposito para alloyal
-                $ret['deposit'] = (new AlloyalController)->fazer_deposito([
-                    'cpf'=>$client->cpf,
-                    'client_id'=>$client->id,
-                    'description'=>'Depósito via API'
-                ]);
+                // $ret['deposit'] = (new AlloyalController)->fazer_deposito([
+                //     'cpf'=>$client->cpf,
+                //     'client_id'=>$client->id,
+                //     'description'=>'Depósito via API'
+                // ]);
                 $link_active_cad = Qlib::qoption('link_active_cad');
                 $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
                 $ret['link_active_cad'] = $link_active_cad;
@@ -303,6 +325,12 @@ class ClientController extends Controller
             $ret['points'] = $savePoints;
 
             if($savePoints){
+                 //enviar deposito para alloyal
+                // $ret['deposit'] = (new AlloyalController)->fazer_deposito([
+                //     'cpf'=>$client->cpf,
+                //     'client_id'=>$client->id,
+                //     'description'=>'Depósito via API'
+                // ]);
                 $link_active_cad = Qlib::qoption('link_active_cad');
                 $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
                 $ret['link_active_cad'] = $link_active_cad;
@@ -337,6 +365,9 @@ class ClientController extends Controller
         if ($permissionCheck) return $permissionCheck;
 
         // Se for requisição PUT, processar apenas pontos
+        if ($request->isMethod('GET')) {
+            return $this->index($request);
+        }
         if ($request->isMethod('PUT')) {
             return $this->processPointsOnly($request);
         }
