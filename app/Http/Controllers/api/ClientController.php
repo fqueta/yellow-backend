@@ -204,7 +204,7 @@ class ClientController extends Controller
         $validated['permission_id'] = $this->cliente_permission_id;
         $validated['config'] = isset($validated['config']) ? $this->sanitizeInput($validated['config']) : [];
 
-        if(isArray($validated['config'])){
+        if(isset($validated['config']) && is_array($validated['config'])){
             $validated['config'] = json_encode($validated['config']);
         }
 
