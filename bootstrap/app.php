@@ -17,8 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        // Adicionar CORS para todas as rotas
-        $middleware->append(HandleCors::class);
+        // CORS deve ser o primeiro middleware
+        $middleware->prepend(HandleCors::class);
 
         $middleware->web(append: [
             HandleAppearance::class,
@@ -26,10 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        // Ou se preferir aplicar CORS apenas para API:
-        // $middleware->api(append: [
-        //     HandleCors::class,
-        // ]);
+        // Aplicar CORS também para API
+        $middleware->api(prepend: [
+            HandleCors::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
