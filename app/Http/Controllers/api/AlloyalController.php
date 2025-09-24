@@ -17,12 +17,14 @@ class AlloyalController extends Controller
     protected $clientEmployeeToken;
     protected $business_id_alloyal;
     protected $endpoint;
+    protected $deposit_active = false;
     public function __construct()
     {
         $this->url_api_aloyall = Qlib::qoption('url_api_aloyall') ?? 'https://api.lecupon.com';
         $this->clientEmployeeEmail = Qlib::qoption('email_admin_api_alloyal') ?? '';
         $this->clientEmployeeToken = Qlib::qoption('token_api_alloyal') ?? '';
         $this->business_id_alloyal = Qlib::qoption('business_id_alloyal') ?? '2676';
+        $this->deposit_active = Qlib::qoption('deposit_active') ?? false;
         $this->endpoint = '/client/v2/businesses/' . $this->business_id_alloyal ;
     }
     /**
@@ -130,22 +132,84 @@ class AlloyalController extends Controller
             if(!$client_id){
                 $client_id = Client::where('cpf',$d_send['cpf'])->value('id');
             }
+            //Faser deposito dos creditos na alloyal
             if($client_id){
                 $ret['message'] .= ', ID: ' . $client_id;
                 $ret['client_id'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
                 //depositar na carteira
                 $ret['message'] .= ', ID do usuário: ' . $client_id;
-                if(isset($data['cpf'])){
+                if(isset($data['cpf']) && $this->deposit_active){
                     $ret['data']['deposit'] = $this->fazer_deposito(['cpf'=>$data['cpf'],'client_id'=>$client_id,'description'=>'Depósito via API']);
                 }
             }
             return $ret;
         } catch (\Throwable $th) {
             //throw $th;
-            $ret['message'] = 'Erro ao criar usuário, status: ' . $response->status();
-            $ret['message'] .= $th->getMessage();
+            $ret['message'] = 'Erro ao criar usuário, status: ' . $th->getMessage();
+            // $ret['message'] .= $th->getMessage();
+            $ret['error'] = $th->getMessage();
+            $ret['data'] = $d_send;
             return $ret;
         }
+    }
+    /**
+     * Ativar um usuário
+     */
+    public function ativate($d_send){
+        $cpf = $d_send['cpf'] ?? null;
+        $name = $d_send['name'] ?? null;
+        if(!$cpf){
+            return ['exec'=>false,'message'=>'Dados incompletos'];
+        }
+        $client_id = $this->get_client_id($cpf);
+        if(!$client_id){
+            return ['exec'=>false,'message'=>'Cliente não encontrado'];
+        }
+         $headers = [
+            'X-ClientEmployee-Email' => $this->clientEmployeeEmail,
+            'X-ClientEmployee-Token' => $this->clientEmployeeToken,
+            'Content-Type' => 'application/json'
+        ];
+        //manodar body atravez do esquema
+        $body = [
+            "name" => $name,
+            "cpf" => $cpf,
+        ];
+        $ret['exec'] = false;
+        $ret['message'] = 'Erro ao criar usuário';
+        try {
+            $endpoint = $this->endpoint . '/authorized_users';
+            $url = $this->url_api_aloyall . $endpoint;
+            $response = Http::withHeaders($headers)->post($url, $body);
+            dd($url,$headers,$response->json(),$body);
+            $ret['exec'] = true;
+            $ret['message'] = 'Usuário ativado com sucesso';
+            $data = $response->json();
+            $ret['data'] = $data;
+            $ret['message'] = 'Usuário ativado com sucesso, status: ' . $response->status();
+            if(!$client_id){
+                $client_id = Client::where('cpf',$d_send['cpf'])->value('id');
+            }
+
+            if($client_id){
+                $ret['message'] .= ', ID: ' . $client_id;
+                $ret['client_id'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
+                //depositar na carteira
+                $ret['message'] .= ', ID do usuário: ' . $client_id;
+                if(isset($data['cpf']) && $this->deposit_active){
+                    $ret['data']['deposit'] = $this->fazer_deposito(['cpf'=>$data['cpf'],'client_id'=>$client_id,'description'=>'Depósito via API']);
+                }
+            }
+            return $ret;
+        } catch (\Throwable $th) {
+            //throw $th;
+            $ret['message'] = 'Erro ao criar usuário, status: ' . $th->getMessage();
+            // $ret['message'] .= $th->getMessage();
+            $ret['error'] = $th->getMessage();
+            $ret['data'] = $d_send;
+            return $ret;
+        }
+        return $activateAlloyal;
     }
     /**
      * Para fazer o depsito
@@ -182,7 +246,11 @@ class AlloyalController extends Controller
         ];
         $idendificador = Qlib::get_usermeta($client_id,'id_points');
         // dd($data,$ponts,$multinplicador);
-        $ret = $this->deposit($data,$idendificador);
+        if($this->deposit_active){
+            $ret = $this->deposit($data,$idendificador);
+        }else{
+            $ret = ['exec'=>false,'message'=>'Depósito não está ativo'];
+        }
         if($ret['exec'] && $amount){
             // dump($client_id,$amount);
             $ret['data']['debito'] = $this->debitar($client_id,$amount);

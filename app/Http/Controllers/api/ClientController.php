@@ -796,22 +796,82 @@ class ClientController extends Controller
                 ];
             }
         }
-        $client->status = 'actived';
-        $client->ativo = 's';
-        $client->excluido = 'n';
-        $client->save();
+        //ativar na alloyal
+        try{
+            $activateAlloyal = (new AlloyalController)->ativate([
+                'cpf' => $client->cpf,
+                'name' => $client->name,
+            ]);
+            $message = $activateAlloyal['message'] ?? '';
+        }catch(\Exception $e){
+            $message = $e->getMessage();
+            // dd($message);
+            if($type=='json'){
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente no provedor',
+                    'errors' => $message,
+                ], 400);
+            }else{
+                return [
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente no provedor',
+                    'errors' => $message,
+                ];
+            }
+            return $ret;
+        }
+        //ativa localmente
+        try{
+            $client->status = 'actived';
+            $client->ativo = 's';
+            $client->excluido = 'n';
+            $client->save();
+        }catch(\Exception $e){
+            $message = $e->getMessage();
+            if($type=='json'){
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente',
+                    'errors' => $message,
+                ], 400);
+            }else{
+                return [
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente',
+                    'errors' => $message,
+                ];
+            }
+            return $ret;
+        }
         if($type=='json'){
-            return response()->json([
-                'exec' => true,
-                'message' => 'Cliente ativado com sucesso',
-                'data' => $client,
-            ], 200);
+            if($activateAlloyal['exec']){
+                return response()->json([
+                    'exec' => true,
+                    'message' => 'Cliente ativado com sucesso',
+                    'data' => $client,
+                ], 200);
+            }else{
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente no provedor',
+                    'errors' => $activateAlloyal['message'],
+                ], 400);
+            }
         }else{
-            return [
-                'exec' => true,
-                'message' => 'Cliente ativado com sucesso',
-                'data' => $client,
-            ];
+            if($activateAlloyal['exec']){
+                return [
+                    'exec' => true,
+                    'message' => 'Cliente ativado com sucesso',
+                    'data' => $client,
+                ];
+            }else{
+                return [
+                    'exec' => false,
+                    'message' => 'Erro ao ativar cliente no provedor',
+                    'errors' => $activateAlloyal['message'],
+                ];
+            }
         }
     }
     /**
