@@ -181,7 +181,7 @@ class AlloyalController extends Controller
             $endpoint = $this->endpoint . '/authorized_users';
             $url = $this->url_api_aloyall . $endpoint;
             $response = Http::withHeaders($headers)->post($url, $body);
-            dd($url,$headers,$response->json(),$body);
+            // dd($url,$headers,$response->json(),$body);
             $ret['exec'] = true;
             $ret['message'] = 'Usuário ativado com sucesso';
             $data = $response->json();
