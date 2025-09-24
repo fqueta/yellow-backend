@@ -259,7 +259,9 @@ class ClientController extends Controller
 
         // Buscar cliente pelo CPF
         $cpf = str_replace(['.','-'],'',$request->cpf);
-        $client = Client::where('cpf', $cpf)->first();
+        $client = Client::where('cpf', $cpf)
+            ->where('status', 'actived')
+            ->first();
         // dd($client,$cpf);
         if (!$client) {
             return response()->json([
@@ -364,13 +366,19 @@ class ClientController extends Controller
     public function pre_registred(Request $request)
     {
         // Verificar permissões
-        $permissionCheck = $this->checkPermissions('create');
+        $type_permission = 'create';
+        if ($request->isMethod('GET')) {
+            $type_permission = 'view';
+        }
+        if ($request->isMethod('PUT')) {
+            $type_permission = 'update';
+        }
+        $permissionCheck = $this->checkPermissions($type_permission);
         if ($permissionCheck) return $permissionCheck;
 
         // Se for requisição PUT, processar apenas pontos
         if ($request->isMethod('GET')) {
             $clients = $this->index($request);
-
             return response()->json($clients);
         }
         if ($request->isMethod('PUT')) {
