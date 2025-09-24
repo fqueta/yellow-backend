@@ -320,7 +320,7 @@ class ClientController extends Controller
             }
         }
         $ret['exec'] = true;
-        $ret['message'] = $message.' Pontos processados com sucesso';
+        $ret['message'] = trim($message.' Pontos processados com sucesso');
         $ret['status'] = 200;
 
         return response()->json($ret, 200);
