@@ -313,9 +313,9 @@ class ClientController extends Controller
                 //     'client_id'=>$client->id,
                 //     'description'=>'Depósito via API'
                 // ]);
-                $link_active_cad = Qlib::qoption('link_active_cad');
-                $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
-                $ret['link_active_cad'] = $link_active_cad;
+                // $link_active_cad = Qlib::qoption('link_active_cad');
+                // $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
+                // $ret['link_active_cad'] = $link_active_cad;
                 $ret['cpf'] = $client->cpf;
             }
         }
