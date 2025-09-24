@@ -371,7 +371,7 @@ class ClientController extends Controller
             $type_permission = 'view';
         }
         if ($request->isMethod('PUT')) {
-            $type_permission = 'update';
+            $type_permission = 'edit';
         }
         $permissionCheck = $this->checkPermissions($type_permission);
         if ($permissionCheck) return $permissionCheck;
