@@ -74,7 +74,7 @@ class PermissionService
         if($name=='api.clients.index' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred'){
             $url = '/clients';
         }
-        if($name=='api.clients.inativar' || $name == 'api.clients.index_pre_registred'){
+        if($name=='api.clients.inactivate' || $name == 'api.clients.index_pre_registred'){
             $url = '/clients';
         }
         if($name=='api.partners.index' || $name == 'api.partners.update' || $name == 'api.partners.show' || $name == 'api.partners.store' || $name == 'api.partners.destroy' || $name == 'api.partners.restore' || $name == 'api.partners.forceDelete' || $name == 'api.partners.trash'){

@@ -238,9 +238,8 @@ class ClientController extends Controller
 
         return $validated;
     }
-
     /**
-     * Processar apenas pontos (método PUT)
+     * Processar apenas pontos (método PUT) usar para ativar o cliente inavido
      */
     private function processPointsOnly(Request $request)
     {
@@ -252,6 +251,7 @@ class ClientController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
+                'exec' => false,
                 'message' => 'Erro de validação',
                 'errors' => $validator->errors(),
             ], 422);
@@ -260,16 +260,34 @@ class ClientController extends Controller
         // Buscar cliente pelo CPF
         $cpf = str_replace(['.','-'],'',$request->cpf);
         $client = Client::where('cpf', $cpf)
-            ->where('status', 'actived')
+            // ->where('status', 'actived')
             ->first();
-        // dd($client,$cpf);
         if (!$client) {
             return response()->json([
+                'exec' => false,
                 'message' => 'Cliente não encontrado',
                 'errors' => ['cpf' => ['Cliente com este CPF não foi encontrado']],
             ], 404);
         }
-
+        $message = '';
+        //Verificar se o cliente estiver inativo ativar
+        if($client->status == 'inactived'){
+            $ativar = $this->activate($client->cpf,'array');
+            if($ativar['exec']){
+                $message = 'Cliente ativado com sucesso';
+                $client = Client::where('cpf', $cpf)
+                    ->where('status', 'actived')
+                    ->first();
+            }else{
+                $message = $ativar['message'] ?? 'Erro ao ativar cliente';
+                return response()->json([
+                    'exec' => false,
+                    'data' => $ativar,
+                    'message' => $message,
+                    'errors' => ['cpf' => [$message]],
+                ], 422);
+            }
+        }
         // Processar pontos
         $pontos = $request->points;
         $ret = [];
@@ -301,8 +319,8 @@ class ClientController extends Controller
                 $ret['cpf'] = $client->cpf;
             }
         }
-
-        $ret['message'] = 'Pontos processados com sucesso';
+        $ret['exec'] = true;
+        $ret['message'] = $message.' Pontos processados com sucesso';
         $ret['status'] = 200;
 
         return response()->json($ret, 200);
@@ -353,6 +371,7 @@ class ClientController extends Controller
     {
         if (!empty($cpf) && !Qlib::validaCpf($cpf)) {
             return response()->json([
+                'exec' => false,
                 'message' => 'Erro de validação',
                 'errors'  => ['cpf' => ['CPF inválido']],
             ], 422);
@@ -401,6 +420,7 @@ class ClientController extends Controller
         $clientCheck = Client::where('cpf', $request->cpf)->first();
         if($clientCheck){
             return response()->json([
+                'exec' => false,
                 'message' => 'CPF já existe',
                 'errors'  => ['cpf' => ['CPF já existe']],
             ], 422);
@@ -423,6 +443,7 @@ class ClientController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
+                'exec' => false,
                 'message' => 'Erro de validação',
                 'errors'  => $validator->errors(),
             ], 422);
@@ -442,6 +463,7 @@ class ClientController extends Controller
 
         // Preparar resposta
         $ret = array_merge($pointsResult, [
+            'exec' => true,
             'message' => 'Cliente criado com sucesso',
             'status' => 201,
         ]);
@@ -737,27 +759,87 @@ class ClientController extends Controller
             'status' => 200,
         ], 200);
     }
-
+    /**
+     * Ativar um cliente específico
+     */
+    public function activate($cpf=false,$type='json'){
+        if(!$cpf){
+            if($type=='json'){
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Erro de validação',
+                    'errors' => ['cpf' => ['CPF inválido']],
+                ], 422);
+            }else{
+                return [
+                    'exec' => false,
+                    'message' => 'Erro de validação',
+                    'errors' => ['cpf' => ['CPF inválido']],
+                ];
+            }
+        }
+        $cpf = str_replace(['.', '-'], '', $cpf);
+        $client = Client::where('cpf', $cpf)
+            ->first();
+        if (!$client) {
+            if($type=='json'){
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Cliente não encontrado',
+                    'errors' => ['cpf' => ['Cliente com este CPF não foi encontrado']],
+                ], 404);
+            }else{
+                return [
+                    'exec' => false,
+                    'message' => 'Cliente não encontrado',
+                    'errors' => ['cpf' => ['Cliente com este CPF não foi encontrado']],
+                ];
+            }
+        }
+        $client->status = 'actived';
+        $client->ativo = 's';
+        $client->excluido = 'n';
+        $client->save();
+        if($type=='json'){
+            return response()->json([
+                'exec' => true,
+                'message' => 'Cliente ativado com sucesso',
+                'data' => $client,
+            ], 200);
+        }else{
+            return [
+                'exec' => true,
+                'message' => 'Cliente ativado com sucesso',
+                'data' => $client,
+            ];
+        }
+    }
     /**
      * Inativar um cliente específico
      */
-    public function inativar(Request $request, string $cpf)
+    public function inactivate(Request $request, string $cpf)
     {
         $user = $request->user();
         if (!$user) {
-            return response()->json(['error' => 'Acesso negado'], 403);
+            return response()->json([
+                'exec' => false,
+                'error' => 'Acesso negado',
+            ], 403);
         }
         if (!$this->permissionService->isHasPermission('delete')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
+            return response()->json([
+                'exec' => false,
+                'error' => 'Acesso negado',
+            ], 403);
         }
-
+        $cpf = str_replace(['.', '-'], '', $cpf);
         $client = Client::where('cpf',$cpf)->first();
         if (!$client) {
             return response()->json([
                 'exec'=>false,
                 'message' => 'Cliente não encontrado',
                 'status' => 404
-            ]);
+            ], 404);
         }
         $client->update([
             'ativo' => 'n',
@@ -794,6 +876,7 @@ class ClientController extends Controller
             $client->update([
                 'excluido' => 's',
                 'status' => 'inactived',
+                'ativo' => 'n',
                 'reg_deletado' => json_encode([
                     'usuario' => $request->user()->id,
                     'nome' => $request->user()->name,
