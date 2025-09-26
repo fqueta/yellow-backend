@@ -47,7 +47,7 @@ Value: /api/
 3. **Access-Control-Allow-Headers**
    - Action: `Set static`
    - Header name: `Access-Control-Allow-Headers`
-   - Value: `Content-Type, Authorization, X-Requested-With, Accept, Origin`
+   - Value: `Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-TOKEN, x-form-token`
 
 4. **Access-Control-Allow-Credentials**
    - Action: `Set static`

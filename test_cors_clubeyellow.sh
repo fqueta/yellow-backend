@@ -17,14 +17,14 @@ echo "   Origin: $ORIGIN"
 echo ""
 
 # 1. Teste OPTIONS (Preflight)
-echo "1. Teste OPTIONS (Preflight Request)"
-echo "====================================="
+echo "1. Teste OPTIONS (Preflight Request com x-form-token)"
+echo "===================================================="
 echo "🔄 Enviando requisição OPTIONS..."
 
 OPTIONS_RESPONSE=$(curl -s -I -X OPTIONS \
   -H "Origin: $ORIGIN" \
   -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: Content-Type, Authorization" \
+  -H "Access-Control-Request-Headers: Content-Type, Authorization, x-form-token" \
   "$API_URL" 2>/dev/null)
 
 echo "📋 Resposta completa:"
