@@ -18,6 +18,7 @@ class AlloyalController extends Controller
     protected $business_id_alloyal;
     protected $endpoint;
     protected $deposit_active = false;
+    protected $redirect_url_login = '';
     public function __construct()
     {
         $this->url_api_aloyall = Qlib::qoption('url_api_aloyall') ?? 'https://api.lecupon.com';
@@ -26,6 +27,7 @@ class AlloyalController extends Controller
         $this->business_id_alloyal = Qlib::qoption('business_id_alloyal') ?? '2676';
         $this->deposit_active = Qlib::qoption('deposit_active') ?? false;
         $this->endpoint = '/client/v2/businesses/' . $this->business_id_alloyal ;
+        $this->redirect_url_login = Qlib::qoption('redirect_url_login_alloyal') ?? '';
     }
     /**
      * Display a listing of the resource.
@@ -135,13 +137,15 @@ class AlloyalController extends Controller
             //Faser deposito dos creditos na alloyal
             if($client_id){
                 $ret['message'] .= ', ID: ' . $client_id;
-                $ret['client_id'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
+                $ret['client_type_save'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
                 //depositar na carteira
                 $ret['message'] .= ', ID do usuário: ' . $client_id;
                 if(isset($data['cpf']) && $this->deposit_active){
                     $ret['data']['deposit'] = $this->fazer_deposito(['cpf'=>$data['cpf'],'client_id'=>$client_id,'description'=>'Depósito via API']);
                 }
+                $ret['redirect'] = $this->redirect_url_login;
             }
+            // dd($ret);
             return $ret;
         } catch (\Throwable $th) {
             //throw $th;

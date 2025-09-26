@@ -258,7 +258,7 @@ class ClientController extends Controller
         }
 
         // Buscar cliente pelo CPF
-        $cpf = str_replace(['.','-'],'',$request->cpf);
+        $cpf = str_replace(['.','-'],'', $requestData['cpf'] ?? $request->cpf);
         $client = Client::where('cpf', $cpf)
             // ->where('status', 'actived')
             ->first();
@@ -525,11 +525,53 @@ class ClientController extends Controller
             'status' => 201,
         ], 201);
     }
-    public function store_active(Request $request)
+    public function store_active(Request $request, $etp = null)
     {
-        $cpf = str_replace(['.','-'],'',$request->cpf);
+        // Log de debug para verificar se o método está sendo executado
+        // \Log::info('ClientController::store_active - Método executado', [
+        //     'request_data' => $request->all(),
+        //     'request_input' => $request->input(),
+        //     'request_json' => $request->json()->all(),
+        //     'content_type' => $request->header('Content-Type'),
+        //     'raw_content' => $request->getContent(),
+        //     'etp' => $etp,
+        //     'timestamp' => now()
+        // ]);
+
+        // // Parse manual do JSON se os dados não estiverem disponíveis via request->all()
+        // $requestData = $request->all();
+        // \Log::info('Debug parse JSON', [
+        //     'requestData_empty' => empty($requestData),
+        //     'has_content' => !empty($request->getContent()),
+        //     'content_length' => strlen($request->getContent())
+        // ]);
+
+        if (empty($requestData) && $request->getContent()) {
+            // Limpar caracteres UTF-8 malformados
+            $content = $request->getContent();
+            $cleanContent = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+
+            $jsonData = json_decode($cleanContent, true);
+            \Log::info('Tentativa de parse JSON', [
+                'original_content' => $content,
+                'clean_content' => $cleanContent,
+                'json_error' => json_last_error(),
+                'json_error_msg' => json_last_error_msg(),
+                'is_array' => is_array($jsonData),
+                'parsed_data' => $jsonData
+            ]);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+                $requestData = $jsonData;
+                \Log::info('JSON parseado manualmente com sucesso', ['parsed_data' => $requestData]);
+            }
+        }
+
+        $cpf = str_replace(['.','-'],'', $requestData['cpf'] ?? $request->cpf);
         $request->merge(['cpf' => $cpf]);
         $client = Client::where('cpf', $cpf)->first();
+
+        \Log::info('Buscando cliente', ['cpf_original' => $requestData['cpf'] ?? $request->cpf, 'cpf_limpo' => $cpf]);
         // dd($request->all());
         if (!$client) {
             return response()->json(['error' => 'Cliente não encontrado ou invalido'], 404);
@@ -537,24 +579,35 @@ class ClientController extends Controller
         // if($client->status == 'actived'){
         //     return response()->json(['message' => 'Cliente já está cadastrado e ativado'], 422);
         // }
-        $data_update = $request->all();
-        /**Sanitizar dados antes de atualizar */
-        $data_update = $this->sanitizeInput($data_update);
-        /**Validar os campos antes de atualizar */
-        $validator = Validator::make($data_update, [
+        //verificar se aceitou os termos
+
+        if(!isset($requestData['termsAccepted']) || !$requestData['termsAccepted'] || $requestData['termsAccepted'] != true){
+            return response()->json(['message' => 'É necessário aceitar os termos'], 422);
+        }
+        if(!isset($requestData['privacyAccepted']) || !$requestData['privacyAccepted'] || $requestData['privacyAccepted'] != true){
+            return response()->json(['message' => 'É necessário aceitar a política de privacidade'], 422);
+        }
+
+        $campos_validacao = [
             'cpf'           => ['nullable','string','max:20', Rule::unique('users','cpf')->ignore($client->id)],
             'cnpj'          => ['nullable','string','max:20', Rule::unique('users','cnpj')->ignore($client->id)],
             'email'         => ['nullable','email', Rule::unique('users','email')->ignore($client->id)],
             'name' => 'required|string|max:255',
             'password' => 'required|string|min:6',
-        ],[
+        ];
+        $mensage = [
             'email.required' => 'O campo e-mail é obrigatório',
             'email.email' => 'O campo e-mail deve ser um endereço de e-mail válido',
             'email.unique' => 'O e-mail já está em uso',
             'name.required' => 'O campo nome é obrigatório',
             'password.required' => 'O campo senha é obrigatório',
             'password.min' => 'A senha deve ter pelo menos 6 caracteres',
-        ]);
+        ];
+        $data_update = $request->all();
+        /**Sanitizar dados antes de atualizar */
+        $data_update = $this->sanitizeInput($data_update);
+        /**Validar os campos antes de atualizar */
+        $validator = Validator::make($data_update, $campos_validacao,$mensage);
         // dd($client->id);
         if ($validator->fails()) {
             return response()->json([
@@ -564,7 +617,7 @@ class ClientController extends Controller
         }
         //Gavar senha sem hash em uma variavel temporaria
         $d_salvar = $validator->validated();
-        $password = $d_salvar['password'];
+        $password = $d_salvar['password'] ?? null;
         if(isset($d_salvar['password'])){
             $d_salvar['password'] = Hash::make($d_salvar['password']);
         }
@@ -580,6 +633,14 @@ class ClientController extends Controller
             $ret['success'] = $this->sendCadastroToAlloyal($d_send_api);
             $ret['message'] = 'Cliente ativado com sucesso';
             $ret['status'] = 200;
+
+            // Log de debug antes do return
+            \Log::info('ClientController::store_active - Retornando resposta', [
+                'response_data' => $ret,
+                'timestamp' => now()
+            ]);
+
+            // dd($ret);
             return response()->json($ret, 200);
         } catch (\Throwable $th) {
             $ret['message'] = 'Erro ao ativar cliente';
@@ -599,17 +660,14 @@ class ClientController extends Controller
             'password' => $data_client['password'],
         ],$client_id);
         // dd($response);
-        $ret['data'] = isset($response['data']) ? $response['data'] : null;
-        if(!isset($ret['data']['id']) && empty($ret['data'])){
-            $ret = $response;
-            return $ret;
-        }
-        // dd($response);
-        if($response['exec']){
-            // $client = Client::findOrFail($client_id);
-            // $client->update(['config' => ['alloyal_id'=>$response['data']['id']]]);
-            $ret['exec'] = true;
-        }
+        $ret = $response;
+
+        // if($response['exec']){
+        //     // $client = Client::findOrFail($client_id);
+        //     // $client->update(['config' => ['alloyal_id'=>$response['data']['id']]]);
+        //     $ret['exec'] = true;
+        // }
+
         return $ret;
     }
     /**

@@ -8,6 +8,7 @@ use App\Http\Controllers\api\ClientController;
 use App\Http\Controllers\api\FinancialController;
 use App\Http\Controllers\api\PartnerController;
 use App\Http\Controllers\api\PointController;
+use App\Http\Controllers\api\PublicFormTokenController;
 use App\Http\Controllers\api\MenuPermissionController;
 use App\Http\Controllers\api\OptionController;
 use App\Http\Controllers\api\PermissionController;
@@ -86,6 +87,16 @@ Route::name('api.')->prefix('api/v1')->middleware([
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
         ->name('password.email');
+
+    // Rotas públicas para tokens de formulário
+    Route::post('public/form-token', [PublicFormTokenController::class, 'generateToken'])->name('public.form-token.generate');
+    Route::post('public/form-token/validate', [PublicFormTokenController::class, 'validateToken'])->name('public.form-token.validate');
+
+    // Rota de ativação de cliente com validação de token
+    Route::post('clients/active', [ClientController::class, 'store_active'])
+        ->middleware('validate.public.form.token')
+        ->name('clients.active');
+
     Route::fallback(function () {
         return response()->json(['message' => 'Rota não encontrada'], 404);
     });
@@ -104,7 +115,6 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::apiResource('clients', ClientController::class,['parameters' => [
             'clients' => 'id'
         ]]);
-        Route::post('clients/active', [ClientController::class, 'store_active'])->name('clients.active');
         Route::get('clients/trash', [ClientController::class, 'trash'])->name('clients.trash');
         Route::put('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore');
         Route::delete('clients/{id}/force', [ClientController::class, 'forceDelete'])->name('clients.forceDelete');

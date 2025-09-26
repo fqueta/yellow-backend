@@ -48,6 +48,11 @@ class OptionsTableSeeder extends Seeder
                 'value' => 'http://yellow-dev.localhost:8080/form-client-active/{cpf}',
                 'url'   => 'link_active_cad',
             ],
+            [
+                'name'  => 'Redirecionar para login Alloyal',
+                'value' => 'https://clube.yellowbc.com.br/',
+                'url'   => 'redirect_url_login_alloyal',
+            ],
         ]);
     }
 }

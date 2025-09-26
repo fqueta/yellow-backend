@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ValidatePublicFormToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,6 +30,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Aplicar CORS também para API
         $middleware->api(prepend: [
             HandleCors::class,
+        ]);
+        
+        // Registrar middlewares personalizados
+        $middleware->alias([
+            'validate.public.form.token' => ValidatePublicFormToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
