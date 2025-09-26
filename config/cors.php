@@ -14,7 +14,7 @@ return [
         'http://127.0.0.1:8000', // Para desenvolvimento local
     ],
     'allowed_origins_patterns' => [],
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['*', 'x-form-token'],
     'exposed_headers' => [],
     'max_age' => 0,
     'supports_credentials' => true,
