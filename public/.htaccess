@@ -13,7 +13,6 @@
         Header always set Access-Control-Allow-Credentials "true"
         Header always set Access-Control-Max-Age "3600"
     </IfModule>
-
     # Handle preflight OPTIONS requests
     RewriteCond %{REQUEST_METHOD} OPTIONS
     RewriteRule ^(.*)$ $1 [R=200,L]

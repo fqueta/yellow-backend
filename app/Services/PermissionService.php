@@ -26,7 +26,7 @@ class PermissionService
         if (!$perm) {
             return false;
         }
-        if(isset($perm[$campo]) && $perm[$campo]){
+        if(isset($perm[$campo]) && $perm[$campo]>0){
             return true;
         }else{
             return false;
@@ -61,7 +61,9 @@ class PermissionService
     }
     private function get_url_by_route($name=''){
         $url = '';
-        // dd($name);
+        if($name=='api.dashboard'){
+            $url = '/';
+        }
         if($name=='api.permissions.index' || $name == 'api.permissions.update' || $name == 'api.permissions.show' || $name == 'api.permissions.store' || $name == 'api.permissions.destroy'){
             $url = '/settings/permissions';
         }

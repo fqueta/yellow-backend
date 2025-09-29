@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use function PHPUnit\Framework\isArray;
 use App\Http\Controllers\api\PointController;
+use Illuminate\Support\Facades\Log;
 
 class ClientController extends Controller
 {
@@ -552,7 +553,7 @@ class ClientController extends Controller
             $cleanContent = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
 
             $jsonData = json_decode($cleanContent, true);
-            \Log::info('Tentativa de parse JSON', [
+            Log::info('Tentativa de parse JSON', [
                 'original_content' => $content,
                 'clean_content' => $cleanContent,
                 'json_error' => json_last_error(),
@@ -563,7 +564,7 @@ class ClientController extends Controller
 
             if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                 $requestData = $jsonData;
-                \Log::info('JSON parseado manualmente com sucesso', ['parsed_data' => $requestData]);
+                Log::info('JSON parseado manualmente com sucesso', ['parsed_data' => $requestData]);
             }
         }
 
@@ -571,7 +572,7 @@ class ClientController extends Controller
         $request->merge(['cpf' => $cpf]);
         $client = Client::where('cpf', $cpf)->first();
 
-        \Log::info('Buscando cliente', ['cpf_original' => $requestData['cpf'] ?? $request->cpf, 'cpf_limpo' => $cpf]);
+        Log::info('Buscando cliente', ['cpf_original' => $requestData['cpf'] ?? $request->cpf, 'cpf_limpo' => $cpf]);
         // dd($request->all());
         if (!$client) {
             return response()->json(['error' => 'Cliente não encontrado ou invalido'], 404);
@@ -635,7 +636,7 @@ class ClientController extends Controller
             $ret['status'] = 200;
 
             // Log de debug antes do return
-            \Log::info('ClientController::store_active - Retornando resposta', [
+            Log::info('ClientController::store_active - Retornando resposta', [
                 'response_data' => $ret,
                 'timestamp' => now()
             ]);

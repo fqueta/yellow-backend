@@ -311,7 +311,7 @@ class UserController extends Controller
             unset($validated['password']);
         }
 
-        if (isset($validated['config']) && isArray($validated['config'])) {
+        if (isset($validated['config']) && is_array($validated['config'])) {
             $validated['config'] = json_encode($validated['config']);
         }
 
