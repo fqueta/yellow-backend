@@ -220,7 +220,7 @@ class UserController extends Controller
         $validated['tipo_pessoa'] = isset($validated['tipo_pessoa']) ? $validated['tipo_pessoa'] : 'pf';
         $validated['permission_id'] = isset($validated['permission_id']) ? $validated['permission_id'] : 5;
         $validated['config'] = isset($validated['config']) ? $this->sanitizeInput($validated['config']) : [];
-        if(isArray($validated['config'])){
+        if(is_array($validated['config'])){
             $validated['config'] = json_encode($validated['config']);
         }
 
