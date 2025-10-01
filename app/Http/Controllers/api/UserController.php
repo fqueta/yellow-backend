@@ -392,4 +392,99 @@ class UserController extends Controller
             'message' => 'Usuário marcado como deletado com sucesso'
         ], 200);
     }
+
+    /**
+     * Atualiza a senha do usuário
+     */
+    public function changePassword(Request $request)
+    {
+        // Validação dos dados recebidos
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+            'new_password_confirmation' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Dados inválidos',
+                'messages' => $validator->errors()
+            ], 422);
+        }
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        // Verificar se a senha atual está correta
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'error' => 'Senha atual incorreta'
+            ], 422);
+        }
+
+        // Atualizar a senha
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Senha atualizada com sucesso'
+        ], 200);
+    }
+
+    /**
+     * Atualiza o perfil do usuário salvando os dados na tabela usermeta
+     */
+    public function updateProfile(Request $request)
+    {
+        // Validação dos dados recebidos
+        $validator = Validator::make($request->all(), [
+            'company' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'name' => 'nullable|string|max:255',
+            'role' => 'nullable|string|max:255'
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Dados inválidos',
+                'messages' => $validator->errors()
+            ], 422);
+        }
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        $data = $validator->validated();
+        $results = [];
+        $errors = [];
+
+        // Salva cada campo como um meta campo separado na tabela usermeta
+        foreach ($data as $key => $value) {
+            if ($value !== null) {
+                $result = Qlib::update_usermeta($user->id, 'profile_' . $key, $value);
+                if ($result) {
+                    $results[$key] = 'Atualizado com sucesso';
+                } else {
+                    $errors[$key] = 'Erro ao atualizar';
+                }
+            }
+        }
+
+        if (empty($errors)) {
+            return response()->json([
+                'message' => 'Perfil atualizado com sucesso',
+                'data' => $results
+            ], 200);
+        } else {
+            return response()->json([
+                'message' => 'Alguns campos não foram atualizados',
+                'data' => $results,
+                'errors' => $errors
+            ], 207); // 207 Multi-Status
+        }
+    }
 }

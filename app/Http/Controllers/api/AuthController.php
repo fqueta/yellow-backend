@@ -37,7 +37,7 @@ class AuthController extends Controller
         if (!Auth::attempt($credentials)) {
             return response()->json(['message' => 'Credenciais inválidas'], 401);
         }
-
+// dd($credentials);
         $user = Auth::user();
 
         // Carrega o grupo de permissões
