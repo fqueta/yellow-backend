@@ -438,14 +438,16 @@ class UserController extends Controller
      */
     public function updateProfile(Request $request)
     {
+        // dd($request->all());
         // Validação dos dados recebidos
         $validator = Validator::make($request->all(), [
             'company' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'name' => 'nullable|string|max:255',
-            'role' => 'nullable|string|max:255'
+            'phone' => 'nullable|string|max:255',
+            'bio' => 'nullable|string|max:255'
         ]);
-        
+
         if ($validator->fails()) {
             return response()->json([
                 'error' => 'Dados inválidos',
@@ -464,7 +466,7 @@ class UserController extends Controller
 
         // Salva cada campo como um meta campo separado na tabela usermeta
         foreach ($data as $key => $value) {
-            if ($value !== null) {
+            if ($value !== null && $key != 'name' && $key != 'email') {
                 $result = Qlib::update_usermeta($user->id, 'profile_' . $key, $value);
                 if ($result) {
                     $results[$key] = 'Atualizado com sucesso';
@@ -475,9 +477,14 @@ class UserController extends Controller
         }
 
         if (empty($errors)) {
+            $user->name = $data['name'];
+            $user->email = $data['email'];
+            $user->save();
+            $newData = User::find($user->id);
+            // $newData->load('profile');
             return response()->json([
                 'message' => 'Perfil atualizado com sucesso',
-                'data' => $results
+                'data' => $newData
             ], 200);
         } else {
             return response()->json([
