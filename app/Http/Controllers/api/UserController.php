@@ -31,13 +31,13 @@ class UserController extends Controller
         }
         return $input;
     }
-    protected PermissionService $permissionService;
+    protected $permissionService;
     public $routeName;
     public $sec;
-    public function __construct(PermissionService $permissionService)
+    public function __construct()
     {
         $this->routeName = request()->route()->getName();
-        $this->permissionService = $permissionService;
+        $this->permissionService = new PermissionService();
         $this->sec = request()->segment(3);
     }
     /**
@@ -58,7 +58,11 @@ class UserController extends Controller
         $order = $request->input('order', 'desc');
         //listar usuarios com permissões dele pra cima
         $permission_id = $request->user()->permission_id;
-        $query = User::query()->where('permission_id','>=',$permission_id)->orderBy($order_by,$order);
+        $query = User::query()
+                ->where('permission_id','>=',$permission_id)
+                ->where('permission_id','!=',Qlib::qoption('permission_partner_id')??5)
+                ->where('permission_id','!=',Qlib::qoption('permission_client_id')??6)
+                ->orderBy($order_by,$order);
 
         // Não exibir registros marcados como deletados ou excluídos
         $query->where(function($q) {
@@ -76,6 +80,22 @@ class UserController extends Controller
         }
         if ($request->filled('cnpj')) {
             $query->where('cnpj', 'like', '%' . $request->input('cnpj') . '%');
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        // dd($request->input('propertys'));
+        if ($request->filled('propertys')) {
+            $propertys = $request->input('propertys');
+            if(is_array($propertys)){
+                $query->where(function($q) use ($propertys){
+                    foreach($propertys as $property){
+                        $q->orWhere('permission_id','=', $property);
+                    }
+                });
+            }else{
+                $query->where('permission_id','<=', Qlib::qoption('permission_partner_id')??5);
+            }
         }
 
         $users = $query->paginate($perPage);
@@ -97,7 +117,29 @@ class UserController extends Controller
         // dd($users);
         return response()->json($users);
     }
-
+    /**
+     * lista todos os usuario que podem ser proprietários, são usuario do permission_id 1 ate 5
+     *
+     */
+    public function propertys(Request $request)
+    {
+        $user = request()->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+        if($user->permission_id > Qlib::qoption('permission_partner_id')??5){
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+        // if (!$this->permissionService->isHasPermission('view')) {
+        //     return response()->json(['error' => 'Acesso negado'], 403);
+        // }
+        $propertys = User::query()
+                ->where('permission_id','<=', Qlib::qoption('permission_partner_id')??5)
+                ->where('permission_id','!=', 0)
+                ->where('status','=', "actived")
+                ->get();
+        return response()->json($propertys);
+    }
 
     /**
      * Store a newly created resource in storage.

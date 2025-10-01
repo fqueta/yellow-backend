@@ -10,11 +10,26 @@ class Client extends User
 {
     protected $table = 'users';
 
-    // Global scope removido pois a coluna permission_id não existe na tabela users
+    // Global scope para filtrar apenas clientes com permission_id=6
     protected static function booted()
     {
-        // Removido o global scope que filtrava por permission_id
-        // pois essa coluna não existe na estrutura atual da tabela users
+        static::addGlobalScope('clients_only', function (Builder $builder) {
+            $builder->where('permission_id', Qlib::qoption('permission_client_id')??6);
+        });
+        
+        // Definir permission_id automaticamente ao criar
+        static::creating(function ($client) {
+            if (empty($client->permission_id)) {
+                $client->permission_id = Qlib::qoption('permission_client_id')??6;
+            }
+        });
+        
+        // Definir permission_id automaticamente ao atualizar
+        static::updating(function ($client) {
+            if (empty($client->permission_id)) {
+                $client->permission_id = Qlib::qoption('permission_client_id')??6;
+            }
+        });
     }
 
     protected $fillable = [

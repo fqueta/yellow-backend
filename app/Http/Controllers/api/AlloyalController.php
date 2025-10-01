@@ -138,6 +138,7 @@ class AlloyalController extends Controller
             if($client_id){
                 $ret['message'] .= ', ID: ' . $client_id;
                 $ret['client_type_save'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
+                $ret['client_alloyal_save'] = Qlib::update_usermeta($client_id,'is_alloyal',json_encode($ret));// $client_id;
                 //depositar na carteira
                 $ret['message'] .= ', ID do usuário: ' . $client_id;
                 if(isset($data['cpf']) && $this->deposit_active){
@@ -198,6 +199,7 @@ class AlloyalController extends Controller
             if($client_id){
                 $ret['message'] .= ', ID: ' . $client_id;
                 $ret['client_id'] = Qlib::update_usermeta($client_id,'is_mileto_user',json_encode($ret));// $client_id;
+                $ret['client_id'] = Qlib::update_usermeta($client_id,'is_alloyal',json_encode($ret));// $client_id;
                 //depositar na carteira
                 $ret['message'] .= ', ID do usuário: ' . $client_id;
                 if(isset($data['cpf']) && $this->deposit_active){

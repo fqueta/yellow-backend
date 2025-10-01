@@ -22,11 +22,12 @@ class ClientController extends Controller
     protected PermissionService $permissionService;
     public $routeName;
     public $sec;
-    public $cliente_permission_id;
+    public $permission_client_id;
     public function __construct()
     {
-        $this->cliente_permission_id = Qlib::qoption('cliente_permission_id')??5;
-        $this->routeName = request()->route()->getName();
+        $this->permission_client_id = Qlib::qoption('permission_client_id')??5;
+        $route = request()->route();
+        $this->routeName = $route ? $route->getName() : 'api.clients';
         $this->permissionService = new PermissionService();
         $this->sec = request()->segment(3);
     }
@@ -71,21 +72,51 @@ class ClientController extends Controller
             $query->where('cnpj', 'like', '%' . $request->input('cnpj') . '%');
         }
 
-        $clients = $query->paginate($perPage);
-
-        // Converter config para array em cada cliente
-        $clients->getCollection()->transform(function ($client) {
-            if (is_string($client->config)) {
-                $configArr = json_decode($client->config, true) ?? [];
-                array_walk($configArr, function (&$value) {
-                    if (is_null($value)) {
-                        $value = (string)'';
+        if ($request->filled('propertys')) {
+            $propertys = $request->input('propertys');
+            if(is_array($propertys)){
+                $query->where(function($q) use ($propertys){
+                    foreach($propertys as $property){
+                        $q->orWhere('permission_id','=', $property);
                     }
                 });
-                $client->config = $configArr;
+            }else{
+                $query->where('permission_id','<=', Qlib::qoption('permission_partner_id')??5);
             }
-            return $client;
-        });
+        }
+
+        $clients = $query->paginate($perPage);
+        // Exibir o SQL da query antes da paginação
+        // dd([
+        //     'sql' => $query->toSql(),
+        //     'bindings' => $query->getBindings(),
+        //     'full_sql' => vsprintf(str_replace('?', '\'%s\'', $query->toSql()), $query->getBindings())
+        // ]);
+        // Converter config para array em cada cliente
+        try {
+            $clients->getCollection()->transform(function ($client) {
+                if (is_string($client->config)) {
+                    $configArr = json_decode($client->config, true) ?? [];
+                    if (is_array($configArr)) {
+                        array_walk($configArr, function (&$value) {
+                            if (is_null($value)) {
+                                $value = (string)'';
+                            }
+                        });
+                        $client->config = $configArr;
+                    } else {
+                        $client->config = [];
+                    }
+                } else {
+                    $client->config = is_array($client->config) ? $client->config : [];
+                }
+                $client->is_alloyal = Qlib::get_usermeta($client->id,'is_alloyal');
+                return $client;
+            });
+        } catch (\Exception $e) {
+            \Log::error('Error in ClientController transform: ' . $e->getMessage());
+            throw $e;
+        }
         if($request->segment(4) == 'registred'){
             $ret = $clients->getCollection()->map(function ($client) {
                 return $this->map_client($client);
@@ -94,6 +125,10 @@ class ClientController extends Controller
         }
         return response()->json($clients);
     }
+
+    /**
+     * Mapeia os dados do cliente para o formato desejado
+     */
     public function map_client($client)
     {
         if(is_array($client)){
@@ -194,7 +229,7 @@ class ClientController extends Controller
                     $is_mileto_user = $this->isMiletoUser($existingUser->id);
                     if($is_mileto_user){
                         $name = $existingUser->nome;
-                        dd($name,$is_mileto_user);
+                        // dd($name,$is_mileto_user);
                         // return response()->json([
                             //     'message' => 'Este cadastro já está em nossa base de dados, verifique na lixeira.',
                             //     'errors'  => ['cpf' => ['Cadastro com este CPF está na lixeira']],
@@ -230,12 +265,12 @@ class ClientController extends Controller
         $validated['ativo'] = isset($validated['ativo']) ? $validated['ativo'] : 's';
         $validated['status'] = $status;
         $validated['tipo_pessoa'] = isset($validated['tipo_pessoa']) ? $validated['tipo_pessoa'] : 'pf';
-        $validated['permission_id'] = $this->cliente_permission_id;
+        $validated['permission_id'] = $this->permission_client_id;
         $validated['config'] = isset($validated['config']) ? $this->sanitizeInput($validated['config']) : [];
 
-        if(isset($validated['config']) && is_array($validated['config'])){
-            $validated['config'] = json_encode($validated['config']);
-        }
+        // if(isset($validated['config']) && is_array($validated['config'])){
+        //     $validated['config'] = json_encode($validated['config']);
+        // }
 
         return $validated;
     }
@@ -416,7 +451,9 @@ class ClientController extends Controller
             'name' => $request->get('name') ? $request->get('name') : 'Pre cadastro '.$request->get('cpf'),
             'status' => 'pre_registred',
             'cpf' => $cpf,
+            'autor' => $request->user()->id,
         ]);
+        // dd($request->all());
         //verifica se o CPF ja Existe
         $clientCheck = Client::where('cpf', $request->cpf)->first();
         if($clientCheck){
@@ -434,6 +471,7 @@ class ClientController extends Controller
             'cpf'           => 'nullable|string|max:20|unique:users,cpf',
             'genero'        => ['required', Rule::in(['ni','m','f'])],
             'status'        => ['required', Rule::in(['actived','inactived','pre_registred'])],
+            'autor'         => 'nullable|string|max:255',
         ]);
         // Extrair pontos antes da validação
         $pontos = 0;
@@ -457,6 +495,7 @@ class ClientController extends Controller
         // Preparar e criar cliente
         $validated = $validator->validated();
         $clientData = $this->prepareClientData($validated, 'pre_registred');
+        // dd($clientData);
         $client = Client::create($clientData);
 
         // Processar pontos se fornecidos
@@ -502,7 +541,10 @@ class ClientController extends Controller
             'password'      => 'nullable|string|min:6',
             'genero'        => ['required', Rule::in(['ni','m','f'])],
             'config'        => 'array',
+            'status'        => ['required', Rule::in(['actived','inactived','pre_registred'])],
+            'autor'         => 'nullable|string|max:255',
         ]);
+        $password = $request->password;
 
         if ($validator->fails()) {
             return response()->json([
@@ -518,10 +560,43 @@ class ClientController extends Controller
         // Preparar e criar cliente
         $validated = $validator->validated();
         $clientData = $this->prepareClientData($validated, 'actived');
+        //verifica se o CPF ja existe se não for vazio
+        if($clientData['cpf']){
+            $clientCheck = Client::where('cpf', $clientData['cpf'])->first();
+            if($clientCheck){
+                    return response()->json([
+                        'exec' => false,
+                        'message' => 'CPF '.$clientData['cpf'].' já existe na base de dados',
+                        'errors'  => ['cpf' => ['CPF já existe']],
+                ], 422);
+            }
+        }
+        //verifica se o CNPJ ja existe
+        // if($clientData['cnpj']){
+        //     $clientCheck = Client::where('cnpj', $clientData['cnpj'])->first();
+        //     if($clientCheck){
+        //         return response()->json([
+        //             'exec' => false,
+        //             'message' => 'CNPJ '.$clientData['cnpj'].' já existe na base de dados',
+        //             'errors'  => ['cnpj' => ['CNPJ já existe']],
+        //         ], 422);
+        //     }
+        // }
         $client = Client::create($clientData);
-
+        $alloyal = null;
+        //verifica se foi salvo com sucesso antes de enviar para Alloyal
+        if($client){
+            $d_send_api['password'] = $password;
+            $d_send_api['id'] = $client['id'];
+            $d_send_api['cpf'] = $client['cpf'];
+            $d_send_api['name'] = $client['name'];
+            $d_send_api['email'] = $client['email'];
+            $alloyal = $this->sendCadastroToAlloyal($d_send_api);
+            // dd($alloyal);
+        }
         return response()->json([
             'data' => $client,
+            'alloyal' => $alloyal,
             'message' => 'Cliente criado com sucesso',
             'status' => 201,
         ], 201);
@@ -660,15 +735,7 @@ class ClientController extends Controller
             'email' => $data_client['email'],
             'password' => $data_client['password'],
         ],$client_id);
-        // dd($response);
         $ret = $response;
-
-        // if($response['exec']){
-        //     // $client = Client::findOrFail($client_id);
-        //     // $client->update(['config' => ['alloyal_id'=>$response['data']['id']]]);
-        //     $ret['exec'] = true;
-        // }
-
         return $ret;
     }
     /**
@@ -685,13 +752,62 @@ class ClientController extends Controller
         }
 
         $client = Client::findOrFail($id);
-
         // Converte config para array se necessário
-        if (is_string($client->config)) {
-            $client->config = json_decode($client->config, true) ?? [];
+        if (is_string($client['config'])) {
+            $client['config'] = json_decode($client['config'], true) ?? [];
+        }
+        //carregar os pontos
+        $pc = new PointController();
+        $points = $pc->saldo($client['id']);
+        // dd($points,$client);
+        if(isset($points)){
+            $client['points'] = (int)$points;
+        }else{
+            $client['points'] = 0;
+        }
+        //link de ativição para quando é pre cadastro
+        $link_active_cad = Qlib::qoption('link_active_cad') ?? null;
+        $link_active_cad = str_replace('{cpf}',$client['cpf'],$link_active_cad);
+        $client['link_active_cad'] = $link_active_cad;
+        $client['is_alloyal'] = Qlib::get_usermeta($client['id'],'is_alloyal') ?? false;
+        if(is_string($client['is_alloyal'])){
+            $client['is_alloyal'] = json_decode($client['is_alloyal'], true) ?? false;
+            if(isset($client['is_alloyal']['data'])){
+                $client['is_alloyal'] = $client['is_alloyal']['data'];
+            }
+        }else{
+            $client['is_alloyal'] = false;
         }
 
-        return response()->json($client);
+        return response()->json(['data' => $client]);
+    }
+
+    /**
+     * Verificar se o usuário tem permissão para criar clientes
+     */
+    public function create(Request $request)
+    {
+        // Verificar se o usuário está autenticado
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        // Verificar permissão de criação
+        if (!$this->permissionService->isHasPermission('create')) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        // Se chegou até aqui, o usuário tem permissão para criar
+        return response()->json([
+            'success' => true,
+            'message' => 'Usuário tem permissão para criar clientes',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'permission_id' => $user->permission_id
+            ]
+        ]);
     }
 
     /**
@@ -720,7 +836,6 @@ class ClientController extends Controller
         }
 
         $clientToUpdate = Client::findOrFail($id);
-
         $validator = Validator::make($request->all(), [
             'tipo_pessoa'   => ['sometimes', Rule::in(['pf','pj'])],
             'name'          => 'sometimes|required|string|max:255',
@@ -731,6 +846,8 @@ class ClientController extends Controller
             'password'      => 'nullable|string|min:6',
             'genero'        => ['sometimes', Rule::in(['ni','m','f'])],
             'verificado'    => ['sometimes', Rule::in(['n','s'])],
+            'autor'         =>'nullable|string|max:255',
+            'status'        => ['sometimes', Rule::in(['actived', 'inactived', 'pre_registred'])],
             'config'        => 'array'
         ]);
 
@@ -754,35 +871,50 @@ class ClientController extends Controller
 
         // Sanitização dos dados
         $validated = $this->sanitizeInput($validated);
-
+        $clientData = $this->prepareClientData($validated, 'actived');
         // Tratar senha se fornecida
-        if (isset($validated['password']) && !empty($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        } else {
-            unset($validated['password']);
-        }
-
+        // if (isset($clientData['password']) && !empty($clientData['password'])) {
+        //     $clientData['password'] = Hash::make($clientData['password']);
+        // } else {
+        //     unset($clientData['password']);
+        // }
         // Garantir que permission_id seja sempre 5 (cliente)
-        $validated['permission_id'] = $this->cliente_permission_id;
+        // $clientData['permission_id'] = $this->permission_client_id;
+        // dd($clientData,$this->permission_client_id);
 
         // Tratar config se fornecido
-        if (isset($validated['config'])) {
-            $validated['config'] = $this->sanitizeInput($validated['config']);
-            if (isArray($validated['config'])) {
-                $validated['config'] = json_encode($validated['config']);
+        if (isset($clientData['config'])) {
+            $clientData['config'] = $this->sanitizeInput($clientData['config']);
+            if (isArray($clientData['config'])) {
+                $clientData['config'] = json_encode($clientData['config']);
             }
         }
-
-        $clientToUpdate->update($validated);
+        $clientToUpdate->update($clientData);
 
         // Converter config para array na resposta
-        if (is_string($clientToUpdate->config)) {
-            $clientToUpdate->config = json_decode($clientToUpdate->config, true) ?? [];
+        if (is_string($clientToUpdate['config'])) {
+            $clientToUpdate['config'] = json_decode($clientToUpdate['config'], true) ?? [];
+            // dd($clientData);
         }
-
-        $ret['data'] = $clientToUpdate;
-        $ret['message'] = 'Cliente atualizado com sucesso';
-        $ret['status'] = 200;
+        // dd($clientToUpdate);
+        //verifica se foi atualizado com sucesso
+        if($clientToUpdate->wasChanged()){
+            $d_send_api = $clientToUpdate->toArray();
+            $d_send_api['password'] = $validated['password'] ?? $clientToUpdate['password'];
+            $d_send_api['id'] = $clientToUpdate['id'];
+            $d_send_api['cpf'] = $clientToUpdate['cpf'];
+            $ret['alloyal'] = $this->sendCadastroToAlloyal($d_send_api);
+            $ret['message'] = 'Cliente atualizado com sucesso';
+            $ret['status'] = 200;
+            $ret['data'] = $clientToUpdate;
+        }else{
+            $ret['success'] = false;
+            $ret['message'] = 'Nenhum dado foi atualizado';
+            $ret['status'] = 400;
+        }
+        // $ret['data'] = $clientToUpdate;
+        // $ret['message'] = 'Cliente atualizado com sucesso';
+        // $ret['status'] = 200;
 
         return response()->json($ret, 200);
     }
@@ -1035,7 +1167,7 @@ class ClientController extends Controller
         $order = $request->input('order', 'desc');
 
         $query = Client::withoutGlobalScope('client')
-            ->where('permission_id', $this->cliente_permission_id)
+            ->where('permission_id', $this->permission_client_id)
             ->where('deletado', 's')
             ->orderBy($order_by, $order);
 
@@ -1084,7 +1216,7 @@ class ClientController extends Controller
         $client = Client::withoutGlobalScope('client')
             ->where('id', $id)
             ->where('deletado', 's')
-            ->where('permission_id', $this->cliente_permission_id)
+            ->where('permission_id', $this->permission_client_id)
             ->firstOrFail();
 
         $client->update([
@@ -1113,7 +1245,7 @@ class ClientController extends Controller
 
         $client = Client::withoutGlobalScope('client')
             ->where('id', $id)
-            ->where('permission_id', $this->cliente_permission_id)
+            ->where('permission_id', $this->permission_client_id)
             ->firstOrFail();
 
         $client->delete();

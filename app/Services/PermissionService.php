@@ -64,18 +64,25 @@ class PermissionService
         if($name=='api.dashboard'){
             $url = '/';
         }
+        // dd($name);
         if($name=='api.permissions.index' || $name == 'api.permissions.update' || $name == 'api.permissions.show' || $name == 'api.permissions.store' || $name == 'api.permissions.destroy'){
             $url = '/settings/permissions';
         }
         if($name=='api.users.index' || $name == 'api.users.update' || $name == 'api.users.show' || $name == 'api.users.store' || $name == 'api.users.destroy'){
             $url = '/settings/users';
         }
+        // dd($name);
+        // if($name=='api.propertys.index' || $name == 'api.propertys.update' || $name == 'api.propertys.show' || $name == 'api.propertys.store' || $name == 'api.propertys.destroy'){
+        //     $url = '/settings/users';
+        // }
         if($name=='api.metrics.index' || $name == 'api.metrics.update' || $name == 'api.metrics.show' || $name == 'api.metrics.store' || $name == 'api.metrics.destroy'){
             $url = '/settings/metrics';
         }
-        if($name=='api.clients.index' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred'){
+        // dd($name);
+        if($name=='api.clients.index' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred' || $name == 'api.clients.create'){
             $url = '/clients';
         }
+
         if($name=='api.clients.inactivate' || $name == 'api.clients.index_pre_registred'){
             $url = '/clients';
         }

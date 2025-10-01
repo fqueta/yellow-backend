@@ -104,23 +104,33 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('user',[UserController::class,'perfil'])->name('perfil.user');
         Route::get('user/can',[UserController::class,'can_access'])->name('perfil.can');
         Route::post('/logout',[AuthController::class,'logout'])->name('logout');
-        
+
         // Rota do dashboard
         Route::get('dashboard', [\App\Http\Controllers\api\DashboardController::class, 'index'])->name('dashboard');
+        // Rotas para proprietários (deve vir antes do apiResource)
+        Route::get('users/propertys', [UserController::class, 'propertys'])->name('users.propertys');
+        
         Route::apiResource('users', UserController::class,['parameters' => [
             'users' => 'id'
         ]]);
+
         // registro cliente mileto
         Route::get('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.index_pre_registred');
         Route::post('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.pre_registred');
         Route::put('clients/registred', [ClientController::class, 'pre_registred'])->name('clients.update_pre_registred');
         Route::delete('clients/registred/{cpf}', [ClientController::class, 'inactivate'])->name('clients.inactivate');
-        Route::apiResource('clients', ClientController::class,['parameters' => [
-            'clients' => 'id'
-        ]]);
+
+        // Rota para verificar permissão de criação de clientes
+        Route::get('clients/create', [ClientController::class, 'create'])->name('clients.create');
+
+        // Rotas específicas de clientes (devem vir antes do apiResource)
         Route::get('clients/trash', [ClientController::class, 'trash'])->name('clients.trash');
         Route::put('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore');
         Route::delete('clients/{id}/force', [ClientController::class, 'forceDelete'])->name('clients.forceDelete');
+
+        Route::apiResource('clients', ClientController::class,['parameters' => [
+            'clients' => 'id'
+        ]]);
 
         // Rotas para partners
         Route::apiResource('partners', PartnerController::class,['parameters' => [
@@ -270,6 +280,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         });
 
     });
+
 
 
 });
