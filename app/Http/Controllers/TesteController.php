@@ -49,4 +49,7 @@ class TesteController extends Controller
         // $ret = Qlib::token();
         return $ret;
     }
+    public function store(Request $request){
+        dd(request()->all());
+    }
 }

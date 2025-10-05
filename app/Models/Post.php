@@ -46,6 +46,8 @@ class Post extends Model
         'guid',
         'menu_order',
         'post_type',
+        'post_value1',
+        'post_value2',
         'post_mime_type',
         'comment_count',
         'config',
@@ -148,11 +150,11 @@ class Post extends Model
     {
         $slug = Str::slug($title);
         $count = static::where('post_name', $slug)->count();
-        
+
         if ($count > 0) {
             $slug = $slug . '-' . ($count + 1);
         }
-        
+
         return $slug;
     }
 }

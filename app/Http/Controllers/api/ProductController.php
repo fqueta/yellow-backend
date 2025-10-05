@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\api;
 
+use App\Http\Controllers\Api\PointController;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Services\PermissionService;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
@@ -54,6 +54,98 @@ class ProductController extends Controller
     }
 
     /**
+     * Mapeia dados do frontend para campos do banco de dados
+     */
+    private function mapFrontendToDatabase($validated, $includeDefaults = false)
+    {
+        $mappedData = [];
+
+        // Mapeamento básico de campos
+        if (isset($validated['name'])) {
+            $mappedData['post_title'] = $validated['name']; // name -> post_title
+        }
+        if (isset($validated['description'])) {
+            $mappedData['post_content'] = $validated['description'] ?? ''; // description -> post_content
+        }
+        if (isset($validated['active'])) {
+            $mappedData['post_status'] = $this->get_status($validated['active'] ?? true); // active -> post_status
+        }
+        if (isset($validated['category'])) {
+            $mappedData['guid'] = $validated['category'] ?? null; // category -> guid
+        }
+        if (isset($validated['costPrice'])) {
+            $mappedData['post_value1'] = $validated['costPrice'] ?? 0; // costPrice -> post_value1
+        }
+        if (isset($validated['salePrice'])) {
+            $mappedData['post_value2'] = $validated['salePrice'] ?? 0; // salePrice -> post_value2
+        }
+        if (isset($validated['stock'])) {
+            $mappedData['comment_count'] = $validated['stock'] ?? 0; // stock -> comment_count
+        }
+
+        // Incluir valores padrão se solicitado (para criação)
+        if ($includeDefaults) {
+            $mappedData['post_content'] = $mappedData['post_content'] ?? '';
+            $mappedData['post_status'] = $mappedData['post_status'] ?? $this->get_status(true);
+            $mappedData['guid'] = $mappedData['guid'] ?? null;
+            $mappedData['post_value1'] = $mappedData['post_value1'] ?? 0;
+            $mappedData['post_value2'] = $mappedData['post_value2'] ?? 0;
+            $mappedData['comment_count'] = $mappedData['comment_count'] ?? 0;
+        }
+
+        return $mappedData;
+    }
+
+    /**
+     * Mapeia dados do banco para o formato do frontend
+     */
+    private function mapDatabaseToFrontend($product)
+    {
+        $user_id = request()->user()->id;
+        if(is_array($product)){
+            $product = (object)$product;
+        }
+        $image = $product->config['image'] ?? null;
+        if($image){
+            $image = str_replace('{image}',$image, Qlib::qoption('link_files'));
+        }
+        $product_image = $image;
+        $pc = new PointController();
+        $saldo = $pc->saldo($user_id);
+        $categoryData = Qlib::get_category_by_id($product->guid);
+        $stock = $product->comment_count ?? 0;
+        $isActive = $stock > 0;
+        return [
+            'id' => $product->ID,
+            'name' => $product->post_title, // post_title -> name
+            'description' => $product->post_content, // post_content -> description
+            'slug' => $product->post_name,
+            'active' => $this->decode_status($product->post_status), // post_status -> active
+            'isActive' => $isActive, // true se estoque > 0, false caso contrário
+            'category' => $categoryData['name'] ?? null, // guid -> category
+            'costPrice' => $product->post_value1, // post_value1 -> costPrice
+            'salePrice' => $product->post_value2, // post_value2 -> salePrice
+            'stock' => $stock, // comment_count -> stock
+            'categoryData' => $categoryData,
+            'unitId' => Qlib::get_unit_id_by_name($product->config['unit'] ?? null),
+            'unit' => $product->config['unit'] ?? null,
+            'pointsRequired' => $product->config['points'] ?? null,
+            'image' => $product_image,
+            'rating' => $product->config['rating'] ?? null,
+            'reviews' => $product->config['reviews'] ?? null,
+            'slug' => $product->post_name ?? null,
+            'availability' => $product->config['availability'] ?? null,
+            'terms' => $product->config['terms'] ?? null,
+            'validUntil' => $product->config['validUntil'] ?? null,
+            'inStock' => $product->config['inStock'] ?? null,
+            'originalPrice' => $product->config['originalPrice'] ?? null,
+            'created_at' => $product->created_at,
+            'updated_at' => $product->updated_at,
+            'points_saldo' => $saldo,
+        ];
+    }
+
+    /**
      * Listar todos os produtos
      */
     public function index(Request $request)
@@ -91,8 +183,7 @@ class ProductController extends Controller
         $products = $query->paginate($perPage);
         // Transformar dados para o formato do frontend
         $products->getCollection()->transform(function ($item) {
-            // dd($item);
-            return $this->map_product($item);
+            return $this->mapDatabaseToFrontend($item);
         });
         // dd($products);
 
@@ -108,6 +199,11 @@ class ProductController extends Controller
         if(is_array($product)){
             $product = (object)$product;
         }
+        dd(Qlib::qoption('link_files'));
+        $image = $product->config['image'] ?? null;
+        if($image){
+            $image = str_replace('{image}', Qlib::qoption('link_files'), $image);
+        }
         return [
             'id' => $product->ID,
             'name' => $product->post_title,
@@ -117,10 +213,19 @@ class ProductController extends Controller
             'category' => $product->guid,
             'costPrice' => $product->post_value1,
             'salePrice' => $product->post_value2,
-            'stock' => $product->comment_count,
+            // 'stock' => $product->comment_count,
             'categoryData' => Qlib::get_category_by_id($product->guid),
             'unitData' => Qlib::get_unit_by_id($product->config['unit'] ?? null),
             'unit' => $product->config['unit'] ?? null,
+            'points' => $product->config['points'] ?? null,
+            'image' => $image,
+            'rating' => $product->config['rating'] ?? null,
+            'reviews' => $product->config['reviews'] ?? null,
+            'availability' => $product->config['availability'] ?? null,
+            'terms' => $product->config['terms'] ?? null,
+            'validUntil' => $product->config['validUntil'] ?? null,
+            'inStock' => $product->config['inStock'] ?? null,
+            'originalPrice' => $product->config['originalPrice'] ?? null,
             'created_at' => $product->created_at,
             'updated_at' => $product->updated_at,
         ];
@@ -135,6 +240,15 @@ class ProductController extends Controller
             'salePrice' => 'nullable|numeric|min:0',
             'stock' => 'nullable|integer|min:0',
             'unit' => 'nullable|string|max:100',
+            'points' => 'nullable|integer|min:0',
+            'image' => 'nullable|string|max:255',
+            'rating' => 'nullable|numeric|min:0|max:5',
+            'reviews' => 'nullable|integer|min:0',
+            'availability' => 'nullable|string|max:255',
+            'terms' => 'nullable|string|max:255',
+            'validUntil' => 'nullable|date',
+            'inStock' => 'nullable|boolean',
+            'originalPrice' => 'nullable|numeric|min:0',
         ];
     }
     /**
@@ -142,6 +256,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+
         $user = request()->user();
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
@@ -150,7 +265,6 @@ class ProductController extends Controller
             return response()->json(['error' => 'Acesso negado'], 403);
         }
 
-        // Validação dos dados
         $validator = Validator::make($request->all(), $this->array_filder_validate());
 
         if ($validator->fails()) {
@@ -161,7 +275,7 @@ class ProductController extends Controller
         }
 
         $validated = $validator->validated();
-
+        // dd($validated);
         // Verificar se já existe um produto deletado com o mesmo nome
         $existingProduct = Product::withoutGlobalScope('notDeleted')
             ->where('post_title', $validated['name'])
@@ -169,32 +283,6 @@ class ProductController extends Controller
                 $query->where('excluido', 's')->orWhere('deletado', 's');
             })
             ->first();
-
-        if ($existingProduct) {
-            return response()->json([
-                'message' => 'Já existe um produto com este nome que foi excluído. Restaure-o ou use outro nome.',
-                'error' => 'duplicate_name'
-            ], 409);
-        }
-        $validator = Validator::make($request->all(), $this->array_filder_validate());
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-
-        $validated = $validator->validated();
-
-        // Verificar se já existe um produto deletado com o mesmo nome
-        $existingProduct = Product::withoutGlobalScope('notDeleted')
-            ->where('post_title', $validated['name'])
-            ->where(function($query) {
-                $query->where('excluido', 's')->orWhere('deletado', 's');
-            })
-            ->first();
-
         if ($existingProduct) {
             return response()->json([
                 'message' => 'Já existe um produto com este nome que foi excluído. Restaure-o ou use outro nome.',
@@ -202,17 +290,8 @@ class ProductController extends Controller
             ], 409);
         }
 
-        // Mapear campos do frontend para campos do banco
-        $mappedData = [
-            'post_title' => $validated['name'], // name -> post_title
-            'post_content' => $validated['description'] ?? '', // description -> post_content
-            'post_status' => $this->get_status($validated['active'] ?? true), // active -> post_status
-            'guid' => $validated['category'] ?? null, // category -> guid
-            'post_value1' => $validated['costPrice'] ?? 0, // costPrice -> post_value1
-            'post_value2' => $validated['salePrice'] ?? 0, // salePrice -> post_value2
-            'comment_count' => $validated['stock'] ?? 0, // stock -> comment_count
-        ];
-
+        // Mapear campos do frontend para campos do banco usando o método dedicado
+        $mappedData = $this->mapFrontendToDatabase($validated, true);
         // Configurar unidade no campo config
         if (isset($validated['unit'])) {
             $mappedData['config'] = ['unit' => $validated['unit']];
@@ -238,11 +317,10 @@ class ProductController extends Controller
         $mappedData['to_ping'] = 's';
         $mappedData['excluido'] = 'n';
         $mappedData['deletado'] = 'n';
-
+        // dd($mappedData);
         $product = Product::create($mappedData);
-
         // Preparar resposta no formato do frontend
-        $responseData = $this->map_product($product);
+        $responseData = $this->mapDatabaseToFrontend($product);
 
         return response()->json([
             'data' => $responseData,
@@ -262,12 +340,26 @@ class ProductController extends Controller
         if (!$this->permissionService->isHasPermission('view')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-
-        $product = Product::findOrFail($id);
+        //adicionar um função para fazer consulta atraves do slug caso não encontra por id
+        $product = Product::where('ID',$id)->first();
+        if(!$product){
+            $product = Product::where('post_name', $id)->firstOrFail();
+        }
+        if($product->excluido == 's' || $product->deletado == 's'){
+            return response()->json(['error' => 'Produto excluído ou deletado'], 404);
+        }
+        //se não encontrar retornar erro 404
+        if(!$product){
+            return response()->json(['error' => 'Produto não encontrado'], 404);
+        }
 
         // Preparar resposta no formato do frontend
-        $responseData = $this->map_product($product);
-
+        $responseData = $this->mapDatabaseToFrontend($product);
+        $user = request()->user();
+        $pc = new PointController();
+        $saldo = $pc->saldo($user->id);
+        $user->points_saldo = $saldo;
+        $responseData['user'] = $user->toArray();
         return response()->json([
             'data' => $responseData,
             'message' => 'Produto encontrado com sucesso',
@@ -310,30 +402,12 @@ class ProductController extends Controller
         $validated = $validator->validated();
         $productToUpdate = Product::findOrFail($id);
 
-        // Mapear campos do frontend para campos do banco
-        $mappedData = [];
+        // Mapear campos do frontend para campos do banco usando o método dedicado
+        $mappedData = $this->mapFrontendToDatabase($validated);
 
+        // Gerar novo slug se o nome foi alterado
         if (isset($validated['name'])) {
-            $mappedData['post_title'] = $validated['name']; // name -> post_title
-            $mappedData['post_name'] = $productToUpdate->generateSlug($validated['name']); // Gerar novo slug
-        }
-        if (isset($validated['description'])) {
-            $mappedData['post_content'] = $validated['description']; // description -> post_content
-        }
-        if (isset($validated['category'])) {
-            $mappedData['guid'] = $validated['category']; // category -> guid
-        }
-        if (isset($validated['costPrice'])) {
-            $mappedData['post_value1'] = $validated['costPrice']; // costPrice -> post_value1
-        }
-        if (isset($validated['salePrice'])) {
-            $mappedData['post_value2'] = $validated['salePrice']; // salePrice -> post_value2
-        }
-        if (isset($validated['stock'])) {
-            $mappedData['comment_count'] = $validated['stock']; // stock -> comment_count
-        }
-        if (isset($validated['active'])) {
-            $mappedData['post_status'] = $this->get_status($validated['active']); // active -> post_status
+            $mappedData['post_name'] = $productToUpdate->generateSlug($validated['name']);
         }
 
         // Configurar unidade no campo config
@@ -352,7 +426,7 @@ class ProductController extends Controller
         $productToUpdate->update($mappedData);
 
         // Preparar resposta no formato do frontend
-        $responseData = $this->map_product($productToUpdate);
+        $responseData = $this->mapDatabaseToFrontend($productToUpdate);
 
         return response()->json([
             'exec' => true,
@@ -427,7 +501,7 @@ class ProductController extends Controller
 
         // Transformar dados para o formato do frontend
         $products->getCollection()->transform(function ($item) {
-            return $this->map_product($item);
+            return $this->mapDatabaseToFrontend($item);
         });
 
         return response()->json($products);
@@ -510,5 +584,152 @@ class ProductController extends Controller
             'message' => 'Produto excluído permanentemente',
             'status' => 200,
         ]);
+    }
+
+    /**
+     * Processar resgate de pontos por produto
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function redeem(Request $request)
+    {
+        try {
+            // Validar dados de entrada
+            $validator = Validator::make($request->all(), [
+                'product_id' => 'required|integer|exists:posts,ID',
+                'quantity' => 'required|integer|min:1',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors(),
+                    'status' => 422,
+                ], 422);
+            }
+
+            $user = $request->user();
+            $productId = $request->product_id;
+            $quantity = $request->quantity;
+
+            // Buscar o produto
+            $product = Qlib::buscaPostsPorId($productId);
+            if (!$product) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não encontrado',
+                    'status' => 404,
+                ], 404);
+            }
+
+            // Verificar se o produto está ativo
+            if ($product['post_status'] !== 'publish') {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não está disponível para resgate',
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Verificar estoque disponível
+            // $stock = $product['config']['stock'] ?? 0;
+            $stock = $product['comment_count'] ?? 0;
+            if ($stock < $quantity) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Estoque insuficiente. Disponível: ' . $stock,
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Obter pontos necessários por unidade
+            $unitPoints = floatval($product['config']['points'] ?? 0);
+            if ($unitPoints <= 0) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não possui pontos configurados',
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Calcular total de pontos necessários
+            $totalPointsNeeded = $unitPoints * $quantity;
+
+            // Verificar saldo de pontos do usuário
+            $pointController = new PointController();
+            $userPointsBalance = $pointController->saldo($user->id);
+
+            if ($userPointsBalance < $totalPointsNeeded) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Pontos insuficientes. Necessário: ' . $totalPointsNeeded . ', Disponível: ' . $userPointsBalance,
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Criar o registro de resgate
+            $redemption = \App\Models\Redemption::create([
+                'user_id' => $user->id,
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'points_used' => $totalPointsNeeded,
+                'unit_points' => $unitPoints,
+                'status' => 'pending',
+                'notes' => 'Resgate solicitado via API',
+            ]);
+
+            // Criar snapshot do produto
+            $redemption->createProductSnapshot();
+
+            // Registrar débito de pontos
+            \App\Models\Point::create([
+                'client_id' => $user->id,
+                'valor' => $totalPointsNeeded*(-1),
+                'data' => now(),
+                'description' => 'Resgate de produto: ' . $product['post_title'] . ' (Qtd: ' . $quantity . ')',
+                'tipo' => 'debito',
+                'origem' => 'resgate_produto',
+                'status' => 'ativo',
+                'pedido_id' => $redemption->id,
+                'config' => [
+                    'redemption_id' => $redemption->id,
+                    'product_id' => $productId,
+                    'quantity' => $quantity,
+                ],
+            ]);
+
+            // Atualizar estoque do produto
+            $newStock = $stock - $quantity;
+            $config = $product['config'];
+            $config['stock'] = $newStock;
+
+            Qlib::update_postmeta($productId, 'stock', $newStock);
+            //atualizar o estoque no campo comment_count da tabela post
+            Product::where('ID', $productId)->update(['comment_count' => $newStock]);
+
+            return response()->json([
+                'exec' => true,
+                'message' => 'Resgate processado com sucesso',
+                'data' => [
+                    'redemption_id' => $redemption->id,
+                    'product_name' => $product['post_title'],
+                    'quantity' => $quantity,
+                    'points_used' => $totalPointsNeeded,
+                    'remaining_points' => $userPointsBalance - $totalPointsNeeded,
+                    'status' => $redemption->status,
+                    'estimated_delivery' => $product['config']['delivery_time'] ?? 'Não informado',
+                ],
+                'status' => 200,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'exec' => false,
+                'message' => 'Erro interno do servidor: ' . $e->getMessage(),
+                'status' => 500,
+            ], 500);
+        }
     }
 }

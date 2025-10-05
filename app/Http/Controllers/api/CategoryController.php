@@ -87,6 +87,13 @@ class CategoryController extends Controller
         }
         // dd($query->get());
         $categories = $query->paginate($perPage);
+        if($categories->isEmpty()){
+            return response()->json(['message' => 'Nenhuma categoria encontrada'], 404);
+        }else{
+            $categories->each(function($category){
+                $category->icon = $category->config['icon'] ?? null;
+            });
+        }
         return response()->json($categories);
     }
 

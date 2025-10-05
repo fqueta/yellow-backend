@@ -65,18 +65,36 @@ class MenuSeeder extends Seeder
         //     'parent_id' => $catalogo->id,
         // ]);
 
-        // Menu::create([
-        //     'title' => 'Categorias',
-        //     'url'   => '/categories',
-        //     'parent_id' => $catalogo->id,
-        // ]);
+        Menu::create([
+            'title' => 'Categorias',
+            'url'   => '/categories',
+            'parent_id' => $catalogo->id,
+            'order' => 2,
+        ]);
 
-        // Orçamentos
-        // Menu::create([
-        //     'title' => 'Orçamentos',
-        //     'url'   => '/budgets',
-        //     'icon'  => 'FileText',
-        // ]);
+        // Pedidos
+        $pedidos = Menu::create([
+            'title' => 'Clube de Vantagens',
+            'url'   => '/redemptions',
+            'icon'  => 'ClipboardList',
+            'order' => 2,
+        ]);
+
+        Menu::create([
+            'title' => 'Pedidos',
+            'url'   => '/redemptions',
+            'icon'  => 'CreditCard',
+            'order' => 1,
+            'parent_id' => $pedidos->id,
+        ]);
+        // Pontos
+        Menu::create([
+            'title' => 'Pontos',
+            'url'   => '/points-extracts',
+            'icon'  => 'CreditCard',
+            'order' => 2,
+            'parent_id' => $pedidos->id,
+        ]);
 
         // Ordens de Serviço
         // Menu::create([

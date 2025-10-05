@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\Category;
 use App\Models\Client;
+use App\Models\Product;
 use App\Models\ProductUnit;
 class Qlib
 {
@@ -2790,8 +2791,14 @@ class Qlib
     static function get_unit_by_id($id){
         $unit = ProductUnit::findOrFail($id);
         $unitMap = (new ProductUnitController())->map_product_unit($unit);
-        // dd($unitMap);
         return $unitMap;
+    }
+    static function get_unit_id_by_name($name){
+        $unit = ProductUnit::where('post_title','like','%'.$name.'%')->first();
+        if($unit){
+            return $unit->ID;
+        }
+        return false;
     }
     static function get_client_by_id($id){
         $client = Client::findOrFail($id);
@@ -2800,5 +2807,9 @@ class Qlib
             $client->config = json_decode($client->config, true) ?? [];
         }
         return $client;
+    }
+    static function buscaPostsPorId($id){
+        $post = Post::findOrFail($id);
+        return $post;
     }
 }

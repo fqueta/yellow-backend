@@ -28,6 +28,7 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\TesteController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
@@ -67,7 +68,7 @@ Route::middleware([
     // // });
 
     // require __DIR__.'/settings.php';
-    // require __DIR__.'/auth.php';
+    require __DIR__.'/auth.php';
 
 });
 
@@ -85,8 +86,9 @@ Route::name('api.')->prefix('api/v1')->middleware([
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
-        ->name('password.email');
+    Route::post('forgot-password', function(Request $request) {
+        return app(PasswordResetLinkController::class)->store($request, true);
+    })->name('password.email');
 
     // Rotas públicas para tokens de formulário
     Route::post('public/form-token', [PublicFormTokenController::class, 'generateToken'])->name('public.form-token.generate');
@@ -111,7 +113,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('dashboard', [\App\Http\Controllers\api\DashboardController::class, 'index'])->name('dashboard');
         // Rotas para proprietários (deve vir antes do apiResource)
         Route::get('users/propertys', [UserController::class, 'propertys'])->name('users.propertys');
-        
+
         Route::apiResource('users', UserController::class,['parameters' => [
             'users' => 'id'
         ]]);
@@ -224,12 +226,13 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::delete('product-units/{id}/force', [ProductUnitController::class, 'forceDelete'])->name('product-units.forceDelete');
 
         // Rotas para products
-        Route::get('products/trash', [ProductController::class, 'trash'])->name('products.trash');
-        Route::put('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
-        Route::delete('products/{id}/force', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
         Route::apiResource('products', ProductController::class,['parameters' => [
             'products' => 'id'
         ]]);
+        Route::get('products/trash', [ProductController::class, 'trash'])->name('products.trash');
+        Route::put('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
+        Route::delete('products/{id}/force', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
+        Route::post('products/redeem', [ProductController::class, 'redeem'])->name('products.redeem');
 
         // Rotas para services
         Route::apiResource('services', ServiceController::class,['parameters' => [
@@ -248,13 +251,13 @@ Route::name('api.')->prefix('api/v1')->middleware([
          Route::delete('service-units/{id}/force', [ServiceUnitController::class, 'forceDelete'])->name('service-units.forceDelete');
 
          // Rotas para service-orders
-         Route::apiResource('service-orders', ServiceOrderController::class,['parameters' => [
-             'service-orders' => 'id'
-         ]]);
-         Route::get('service-orders/trash', [ServiceOrderController::class, 'trash'])->name('service-orders.trash');
-         Route::put('service-orders/{id}/restore', [ServiceOrderController::class, 'restore'])->name('service-orders.restore');
-         Route::put('service-orders/{id}/status ', [ServiceOrderController::class, 'updateStatus'])->name('service-orders.update-status');
-         Route::delete('service-orders/{id}/force', [ServiceOrderController::class, 'forceDelete'])->name('service-orders.forceDelete');
+        //  Route::apiResource('service-orders', ServiceOrderController::class,['parameters' => [
+        //      'service-orders' => 'id'
+        //  ]]);
+        //  Route::get('service-orders/trash', [ServiceOrderController::class, 'trash'])->name('service-orders.trash');
+        //  Route::put('service-orders/{id}/restore', [ServiceOrderController::class, 'restore'])->name('service-orders.restore');
+        //  Route::put('service-orders/{id}/status ', [ServiceOrderController::class, 'updateStatus'])->name('service-orders.update-status');
+        //  Route::delete('service-orders/{id}/force', [ServiceOrderController::class, 'forceDelete'])->name('service-orders.forceDelete');
 
          // Rotas para dashboard-metrics
         Route::apiResource('dashboard-metrics', MetricasController::class,['parameters' => [

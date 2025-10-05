@@ -14,27 +14,27 @@ class CategorySeeder extends Seeder
     {
         // Categorias da entidade PRODUTOS
         $categoriasProdutos = [
-            'Lubrificantes',
-            'Filtros',
-            'Pneus',
-            'Elétrica',
-            'Freios',
-            'Suspensão',
-            'Motor',
-            'Diversos',
+            'Oi TV - Antena+',
+            'Roupas',
+            'Vouchers',
+            // 'Elétrica',
+            // 'Freios',
+            // 'Suspensão',
+            // 'Motor',
+            // 'Diversos',
         ];
 
         // Categorias da entidade SERVIÇOS
         $categoriasServicos = [
-            'Manutenção de 50h',
-            'Manutenção de 100h',
-            'Manutenção de 200h',
-            'Manutenção de 500h',
-            'Manutenção de 1000h',
-            'CVA',
-            'Inspeção de aeronavegabilidade',
-            'Inspeção pré-compra',
-            'Pane',
+            // 'Manutenção de 50h',
+            // 'Manutenção de 100h',
+            // 'Manutenção de 200h',
+            // 'Manutenção de 500h',
+            // 'Manutenção de 1000h',
+            // 'CVA',
+            // 'Inspeção de aeronavegabilidade',
+            // 'Inspeção pré-compra',
+            // 'Pane',
             'Outros',
         ];
 

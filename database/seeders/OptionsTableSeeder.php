@@ -49,6 +49,11 @@ class OptionsTableSeeder extends Seeder
                 'url'   => 'link_active_cad',
             ],
             [
+                'name'  => 'Link para arquivos',
+                'value' => 'http://yellow-dev.localhost:8000{image}',
+                'url'   => 'link_files',
+            ],
+            [
                 'name'  => 'Redirecionar para login Alloyal',
                 'value' => 'https://clube.yellowbc.com.br/',
                 'url'   => 'redirect_url_login_alloyal',

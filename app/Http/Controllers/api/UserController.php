@@ -253,6 +253,10 @@ class UserController extends Controller
     {
         $user = $request->user();
         // dd($user);
+        $pc = new PointController();
+        $saldo = $pc->saldo($user->id);
+        $user->points = $saldo;
+        $user->avatar = $user->config['avatar'] ?? null;
         if(!$user){
             return response()->json(['error' => 'Acesso negado'], 403);
         }
@@ -261,10 +265,14 @@ class UserController extends Controller
     public function perfil(Request $request)
     {
         $user = $request->user();
-        // dd($user);
         if(!$user){
             return response()->json(['error' => 'Acesso negado'], 403);
         }
+        $pc = new PointController();
+        $saldo = $pc->saldo($user->id);
+        $user->points = $saldo;
+        $user->avatar = $user->config['avatar'] ?? null;
+
         return response()->json($user);
     }
 

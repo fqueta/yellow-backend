@@ -48,6 +48,7 @@ class PasswordResetLinkController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 500,
+                'error' => $e->getMessage(),
                 'message' => __('Erro ao enviar o link de redefinição de senha.'),
             ], 500);
         }
