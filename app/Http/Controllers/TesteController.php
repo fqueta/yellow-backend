@@ -6,7 +6,7 @@ use App\Services\Escola;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
 use App\Helpers\StringHelper;
-use App\Http\Controllers\Api\PointController;
+use App\Http\Controllers\api\PointController;
 use App\Models\User;
 use Database\Seeders\MenuSeeder;
 

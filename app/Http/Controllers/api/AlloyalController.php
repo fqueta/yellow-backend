@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\api;
 
-use App\Http\Controllers\Api\PointController;
+use App\Http\Controllers\api\PointController;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\User;
