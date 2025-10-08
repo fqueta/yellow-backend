@@ -20,6 +20,7 @@ use App\Http\Controllers\api\MetricasController;
 use App\Http\Controllers\api\DashboardMetricController;
 use App\Http\Controllers\api\ProductUnitController;
 use App\Http\Controllers\api\ProductController;
+use App\Http\Controllers\api\RedeemController;
 use App\Http\Controllers\api\ServiceController;
 use App\Http\Controllers\api\ServiceUnitController;
 use App\Http\Controllers\api\ServiceOrderController;
@@ -164,15 +165,22 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('points/cliente/{clienteId}/saldo', [PointController::class, 'saldoCliente'])->name('points.saldoCliente');
         Route::get('points/relatorio', [PointController::class, 'relatorio'])->name('points.relatorio');
         Route::post('points/expirar', [PointController::class, 'expirarPontos'])->name('points.expirarPontos');
+        Route::get('admin/users/{userId}/points-balance', [PointController::class, 'getUserPointsBalance'])->name('admin.users.points-balance');
+        Route::get('admin/points-extracts', [PointController::class, 'getPointsExtracts'])->name('admin.points-extracts');
+        Route::get('admin/points-extracts/stats', [PointController::class, 'getPointsExtractsStats'])->name('admin.points-extracts.stats');
+        Route::post('admin/points-extracts/adjustments', [PointController::class, 'createPointsAdjustment'])->name('admin.points-extracts.adjustments');
+        Route::get('admin/points-extracts/{id}', [PointController::class, 'show'])->name('admin.points-extracts.show');
+        Route::get('admin/users/{userId}/points-extracts', [PointController::class, 'getUserPointsHistory'])->name('admin.users.points-extracts');
 
         // Rotas para options
-        Route::apiResource('options', OptionController::class,['parameters' => [
-            'options' => 'id'
-        ]]);
+        Route::get('options/all', [OptionController::class, 'index'])->name('options.all.get');
         Route::post('options/all', [OptionController::class, 'fast_update_all'])->name('options.all');
         Route::get('options/trash', [OptionController::class, 'trash'])->name('options.trash');
         Route::put('options/{id}/restore', [OptionController::class, 'restore'])->name('options.restore');
         Route::delete('options/{id}/force', [OptionController::class, 'forceDelete'])->name('options.forceDelete');
+        Route::apiResource('options', OptionController::class,['parameters' => [
+            'options' => 'id'
+        ]]);
 
         // Rotas para posts
         Route::apiResource('posts', PostController::class,['parameters' => [
@@ -233,6 +241,10 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::put('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
         Route::delete('products/{id}/force', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
         Route::post('products/redeem', [ProductController::class, 'redeem'])->name('products.redeem');
+        Route::get('point-store/redemptions', [ProductController::class, 'getUserRedemptions'])->name('products.user-redemptions');
+        Route::get('point-store/redemptions/{id}', [RedeemController::class, 'show'])->name('point-store.redemptions.show');
+        Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
+        Route::patch('admin/redemptions/{id}/status', [RedeemController::class, 'updateStatus'])->name('admin.redemptions.update-status');
 
         // Rotas para services
         Route::apiResource('services', ServiceController::class,['parameters' => [

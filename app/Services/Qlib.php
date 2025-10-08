@@ -2812,4 +2812,23 @@ class Qlib
         $post = Post::findOrFail($id);
         return $post;
     }
+    /**
+     * Metodo para gerar um codigo de resgate     *
+     * @param int $id do arquivo de resgate
+     * @return string
+     */
+    static function redeem_code($id){
+        $redeem = 'R' . str_pad($id, 3, '0', STR_PAD_LEFT);
+        return $redeem;
+    }
+    /**
+     * Metodo para converter o codigo de resgate em id
+     *
+     * @param string $redeem
+     * @return int
+     */
+    static function redeem_id($redeem){
+        $id = intval(str_replace('R', '', $redeem));
+        return $id;
+    }
 }

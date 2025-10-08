@@ -29,7 +29,7 @@ class RegisterController extends Controller
             'email' => $request->email,
             // 'empresa' => $request->empresa,
             'password' => Hash::make($request->password),
-            'permission_id'=>Qlib::qoption('permission_client_id')??6, // Default permission for new users
+            // 'permission_id'=>Qlib::qoption('permission_client_id')??6, // Coluna removida - não existe na tabela
             'token'=>uniqid(), // Default permission for new users
         ]);
         event(new Registered($user));

@@ -668,7 +668,11 @@ class ProductController extends Controller
                     'status' => 400,
                 ], 400);
             }
-
+            //data no padrão brasileiro
+            // $dataHoraAtual = now()->format('d/m/Y H:i:s');
+            $nomeCliente = $user->name;
+            //ip da conexão do cliente
+            $ipCliente = $request->header('X-Forwarded-For') ?? $request->ip();
             // Criar o registro de resgate
             $redemption = \App\Models\Redemption::create([
                 'user_id' => $user->id,
@@ -677,7 +681,7 @@ class ProductController extends Controller
                 'points_used' => $totalPointsNeeded,
                 'unit_points' => $unitPoints,
                 'status' => 'pending',
-                'notes' => 'Resgate solicitado via API',
+                'notes' => 'Resgate solicitado via Loja de pontos por ' . $nomeCliente.' ::: IP: '.$ipCliente,
             ]);
 
             // Criar snapshot do produto
@@ -709,6 +713,16 @@ class ProductController extends Controller
             //atualizar o estoque no campo comment_count da tabela post
             Product::where('ID', $productId)->update(['comment_count' => $newStock]);
 
+            // Disparar job para envio de notificações por email
+            $productModel = Product::find($productId);
+            \App\Jobs\SendRedemptionNotification::dispatch(
+                $user,
+                $productModel,
+                $redemption,
+                $quantity,
+                $totalPointsNeeded
+            );
+
             return response()->json([
                 'exec' => true,
                 'message' => 'Resgate processado com sucesso',
@@ -731,5 +745,92 @@ class ProductController extends Controller
                 'status' => 500,
             ], 500);
         }
+    }
+
+    /**
+     * Lista os resgates de um usuário
+     * Retorna os resgates com informações detalhadas do produto
+     */
+    public function getUserRedemptions(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $user_id = $user->id;
+            // Buscar resgates do usuário com relacionamentos
+            $redemptions = \App\Models\Redemption::with(['product', 'user'])
+                ->doUsuario($user_id)
+                ->ativos()
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            // Mapear dados para o formato solicitado
+            $mappedRedemptions = $redemptions->map(function ($redemption) {
+                $product = $redemption->product;
+                $categoryData = null;
+                $productImage = null;
+
+                if ($product) {
+                     // Obter dados da categoria
+                     $categoryData = \App\Services\Qlib::get_category_by_id($product->guid);
+
+                     // Obter imagem do produto
+                     $image = $product->config['image'] ?? null;
+                     if ($image) {
+                         $productImage = str_replace('{image}', $image, \App\Services\Qlib::qoption('link_files'));
+                     }
+                 }
+
+                // Gerar código de rastreamento fictício baseado no ID
+                // $trackingCode = 'BR' . str_pad($redemption->id, 9, '0', STR_PAD_LEFT);
+                $trackingCode = false;
+
+                return [
+                    'id' => Qlib::redeem_code($redemption->id),
+                    'productId' => (string)$redemption->product_id,
+                    'productName' => $product ? $product->post_title : 'Produto não encontrado',
+                    'productImage' => $productImage ?: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
+                    'pointsUsed' => (int)$redemption->points_used,
+                    'redemptionDate' => $redemption->created_at->format('Y-m-d'),
+                    'status' => $this->mapRedemptionStatus($redemption->status),
+                    'trackingCode' => $trackingCode,
+                    'category' => $categoryData['name'] ?? 'Categoria não definida'
+                ];
+            });
+            //incluir um no de pontos do usuario
+            $pc = new PointController();
+            $saldo = $pc->saldo($user_id);
+            $user->points = $saldo;
+            $responseData['user'] = $user->toArray();
+
+            return response()->json([
+                'success' => true,
+                'data' => $mappedRedemptions,
+                'user' => $responseData['user'],
+                'message' => 'Resgates listados com sucesso'
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar resgates: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Mapeia o status do resgate para um formato mais amigável
+     */
+    private function mapRedemptionStatus($status)
+    {
+        $statusMap = [
+            'pending' => 'pending',
+            'processing' => 'processing',
+            'confirmed' => 'confirmed',
+            'shipped' => 'shipped',
+            'delivered' => 'delivered',
+            'cancelled' => 'cancelled'
+        ];
+
+        return $statusMap[$status] ?? $status;
     }
 }

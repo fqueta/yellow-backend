@@ -22,10 +22,11 @@ class PermissionService
                 ->where('menu_id', $get_id_menu_by_url)
                 //   ->where($campo,1)
                 ->first();
-                // dd($perm);
+                // dd($campo,$get_id_menu_by_url,$perm);
         if (!$perm) {
             return false;
         }
+        // dd($perm[$campo]);
         if(isset($perm[$campo]) && $perm[$campo]>0){
             return true;
         }else{
@@ -38,7 +39,7 @@ class PermissionService
     public function get_id_menu_by_url($rm){
         $url = $this->get_url_by_route($rm);
         $menu_exist = Menu::where('url',$url)->first();
-        // dd($menu_exist);
+        // dd($menu_exist,$rm);
         if($menu_exist){
             return $menu_exist->id;
         }else{
@@ -71,10 +72,6 @@ class PermissionService
         if($name=='api.users.index' || $name == 'api.users.update' || $name == 'api.users.show' || $name == 'api.users.store' || $name == 'api.users.destroy'){
             $url = '/settings/users';
         }
-        // dd($name);
-        // if($name=='api.propertys.index' || $name == 'api.propertys.update' || $name == 'api.propertys.show' || $name == 'api.propertys.store' || $name == 'api.propertys.destroy'){
-        //     $url = '/settings/users';
-        // }
         if($name=='api.metrics.index' || $name == 'api.metrics.update' || $name == 'api.metrics.show' || $name == 'api.metrics.store' || $name == 'api.metrics.destroy'){
             $url = '/settings/metrics';
         }
@@ -94,6 +91,9 @@ class PermissionService
         }
         if($name=='api.points.index' || $name == 'api.points.update' || $name == 'api.points.show' || $name == 'api.points.store' || $name == 'api.points.destroy' || $name == 'api.points.restore' || $name == 'api.points.forceDelete' || $name == 'api.points.trash' || $name == 'api.points.saldoCliente' || $name == 'api.points.relatorio' || $name == 'api.points.expirarPontos'){
             $url = '/points';
+        }
+        if($name == 'api.admin.users.points-balance' || $name == 'api.admin.points-extracts' || $name == 'api.admin.points-extracts.show' || $name == 'api.admin.users.points-extracts'){
+            $url = '/points-extracts';
         }
         if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.restore' || $name == 'api.options.forceDelete' || $name == 'api.options.trash'){
             $url = '/options';
@@ -116,7 +116,7 @@ class PermissionService
         if($name=='api.product-units.index' || $name == 'api.product-units.update' || $name == 'api.product-units.show' || $name == 'api.product-units.store' || $name == 'api.product-units.destroy' || $name == 'api.product-units.restore' || $name == 'api.product-units.forceDelete' || $name == 'api.product-units.trash'){
             $url = '/products';
         }
-        if($name=='api.products.index' || $name == 'api.products.update' || $name == 'api.products.show' || $name == 'api.products.store' || $name == 'api.products.destroy' || $name == 'api.products.restore' || $name == 'api.products.forceDelete' || $name == 'api.products.trash'){
+        if($name=='api.products.index' || $name == 'api.products.user-redemptions' || $name == 'api.admin.redemptions' || $name == 'api.admin.redemptions.update-status' || $name == 'api.products.update' || $name == 'api.products.show' || $name == 'api.products.store' || $name == 'api.products.destroy' || $name == 'api.products.restore' || $name == 'api.products.forceDelete' || $name == 'api.products.trash'){
             $url = '/products';
         }
         if($name=='api.services.index' || $name == 'api.services.update' || $name == 'api.services.show' || $name == 'api.services.store' || $name == 'api.services.destroy' || $name == 'api.services.restore' || $name == 'api.services.forceDelete' || $name == 'api.services.trash'){
@@ -131,10 +131,14 @@ class PermissionService
         if($name=='api.dashboard-metrics.index' || $name == 'api.dashboard-metrics.update' || $name == 'api.dashboard-metrics.show' || $name == 'api.dashboard-metrics.store' || $name == 'api.dashboard-metrics.destroy' || $name == 'api.dashboard-metrics.import-aeroclube'){
             $url = '/settings/metrics';
         }
-        if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all'){
+        if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all.get' || $name == 'api.options.all'){
             $url = '/settings/system';
+        }
+        if($name=='api.point-store.redemptions.show'){
+            $url = '/redemptions';
         }
         // dd($name,$url);
         return $url;
+
     }
 }

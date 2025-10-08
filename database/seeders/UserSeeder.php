@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
             [
                 // 'id' => Qlib::token(),
                 'name' => 'Fernando Queta',
-                'email' => 'fernando@maisaqui.com.br',
+                'email' => 'quetafernando1@gmail.com',
                 'password' => Hash::make('ferqueta'),
                 'status' => 'actived',
                 'verificado' => 'n',
@@ -32,6 +32,15 @@ class UserSeeder extends Seeder
                 'status' => 'actived',
                 'verificado' => 'n',
                 'permission_id' => 2, // Grupo Administrador
+            ],
+            [
+                // 'id' => Qlib::token(),
+                'name' => 'Test User',
+                'email' => 'ferqueta@yahoo.com',
+                'password' => Hash::make('12345678'),
+                'status' => 'actived',
+                'verificado' => 'n',
+                'permission_id' => 6, // Grupo CLientes
             ],
         ];
 

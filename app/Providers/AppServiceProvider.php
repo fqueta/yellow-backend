@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use App\Helpers\StringHelper;
 use Inertia\Inertia;
+use Illuminate\Foundation\AliasLoader;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +30,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Registrar facade Qlib
+        $loader = AliasLoader::getInstance();
+        $loader->alias('Qlib', \App\Facades\QlibFacade::class);
+        
         Inertia::share('nav', [
             ['label' => 'Dashboard', 'href' => '/dashboard'],
             ['label' => 'Usuários', 'href' => '/users'],

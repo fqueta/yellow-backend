@@ -21,7 +21,7 @@ class OptionController extends Controller
     {
         $this->routeName = request()->route()->getName();
         $this->permissionService = $permissionService;
-        $this->sec = request()->segment(3);
+        $this->sec = request()->segment(4);
     }
 
     /**
@@ -36,6 +36,7 @@ class OptionController extends Controller
         if (!$this->permissionService->isHasPermission('view')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
+
 
         $perPage = $request->input('per_page', 100);
         $order_by = $request->input('order_by', 'created_at');
@@ -73,7 +74,11 @@ class OptionController extends Controller
         //     }
         //     return $option;
         // });
-        $ret = $this->AdvancedInputSettings($options);
+        if($this->sec=='all'){
+            $ret = $options;
+        }else{
+            $ret = $this->AdvancedInputSettings($options);
+        }
 
         return response()->json(['data'=>$ret]);
     }

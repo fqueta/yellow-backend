@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 /**
@@ -187,7 +188,7 @@ class PointController extends Controller
             return $permissionCheck['response'];
         }
 
-        $query = Point::with(['cliente', 'usuario']);
+        $query = Point::with(['cliente']);
 
         // Filtros
         if ($request->has('client_id')) {
@@ -531,6 +532,116 @@ class PointController extends Controller
     }
 
     /**
+     * Obter extrato de pontos de um usuário específico
+     * GET /admin/users/{userId}/points-balance
+     */
+    public function getUserPointsBalance(Request $request, string $userId)
+    {
+        $user = request()->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+        if (!$this->permissionService->isHasPermission('view')) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        // Buscar o usuário
+        $targetUser = User::find($userId);
+        if (!$targetUser) {
+            return response()->json(['error' => 'Usuário não encontrado'], 404);
+        }
+
+        // Buscar todas as transações de pontos do usuário
+        $query = Point::where('client_id', $userId)
+                     ->orderBy('created_at', 'desc');
+
+        // Aplicar filtros se fornecidos
+        if ($request->has('start_date')) {
+            $query->where('data', '>=', $request->start_date);
+        }
+        if ($request->has('end_date')) {
+            $query->where('data', '<=', $request->end_date);
+        }
+        if ($request->has('type')) {
+            $query->where('tipo', $request->type);
+        }
+
+        $transactions = $query->get();
+        // Calcular saldo atual
+        $currentBalance = Point::saldoCliente($userId);
+
+        // Mapear transações para o formato solicitado
+        $data = $transactions->map(function ($transaction) use ($targetUser) {
+            return [
+                'id' => $transaction->id,
+                'userId' => $transaction->client_id,
+                'userName' => $targetUser->name,
+                'userEmail' => $targetUser->email,
+                'type' => $transaction->tipo, // 'credito' ou 'debito'
+                'points' => $transaction->tipo === 'debito' ? -abs($transaction->valor) : abs($transaction->valor),
+                'description' => $transaction->description,
+                'reference' => $transaction->pedido_id,
+                'balanceBefore' => $this->calculateBalanceBefore($transaction),
+                'balanceAfter' => $this->calculateBalanceAfter($transaction),
+                'expirationDate' => $transaction->data_expiracao ? $transaction->data_expiracao->toISOString() : null,
+                'createdAt' => $transaction->created_at->toISOString(),
+                'createdBy' => $transaction->autor,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+            'meta' => [
+                'currentBalance' => $currentBalance,
+                'totalTransactions' => $transactions->count(),
+                'user' => [
+                    'id' => $targetUser->id,
+                    'name' => $targetUser->name,
+                    'email' => $targetUser->email,
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Calcular saldo anterior à transação
+     */
+    private function calculateBalanceBefore($transaction)
+    {
+        // dd($transaction);
+        $previousTransactions = Point::where('client_id', $transaction->client_id)
+                                   ->where('created_at', '<', $transaction->created_at)
+                                   ->ativos()
+                                   ->get();
+
+        $balance = 0;
+        foreach ($previousTransactions as $prev) {
+            if ($prev->tipo === 'credito') {
+                $balance += $prev->valor;
+            } else {
+                $balance -= abs($prev->valor);
+            }
+        }
+
+        return $balance;
+    }
+
+    /**
+     * Calcular saldo posterior à transação
+     */
+    private function calculateBalanceAfter($transaction)
+    {
+        $balanceBefore = $this->calculateBalanceBefore($transaction);
+
+        if ($transaction->tipo === 'credito') {
+            return $balanceBefore + $transaction->valor;
+        } else {
+            return $balanceBefore - abs($transaction->valor);
+        }
+    }
+
+    /**
      * Relatório de pontos por período
      */
     public function relatorio(Request $request)
@@ -597,5 +708,433 @@ class PointController extends Controller
             'pontos_expirados' => $pontosExpirados,
             'status' => 200
         ]);
+    }
+
+    /**
+     * Listar extratos de pontos com paginação, filtros e busca
+     * GET /admin/points-extracts
+     */
+    public function getPointsExtracts(Request $request)
+    {
+        // Verificar permissões
+        $permissionCheck = $this->checkUserPermission('view');
+        if (!$permissionCheck['success']) {
+            return $permissionCheck['response'];
+        }
+
+        // Parâmetros de entrada
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 15);
+        $search = $request->get('search');
+        $type = $request->get('type'); // credito ou debito
+        $userId = $request->get('user_id');
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
+
+        // Validar parâmetros
+        if ($type && !in_array($type, ['credito', 'debito'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tipo de transação inválido. Use "credito" ou "debito".'
+            ], 400);
+        }
+
+        if ($order && !in_array($order, ['asc', 'desc'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Direção de ordenação inválida. Use "asc" ou "desc".'
+            ], 400);
+        }
+
+        // Construir query
+        $query = Point::query();
+
+        // Filtro por usuário específico
+        if ($userId) {
+            $query->where('client_id', $userId);
+        }
+
+        // Filtro por tipo de transação
+        if ($type) {
+            $query->where('tipo', $type);
+        }
+
+        // Filtro por período
+        if ($dateFrom) {
+            $query->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo) {
+            $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // Busca por nome, email, descrição ou ID
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
+                  ->orWhere('pedido_id', 'like', "%{$search}%")
+                  ->orWhereHas('cliente', function($clienteQuery) use ($search) {
+                      $clienteQuery->where('name', 'like', "%{$search}%")
+                                  ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Ordenação
+        $allowedSortFields = ['id', 'created_at', 'valor', 'tipo', 'status', 'data'];
+        if (in_array($sort, $allowedSortFields)) {
+            $query->orderBy($sort, $order);
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        // Executar query com paginação
+        $points = $query->paginate($perPage, ['*'], 'page', $page);
+        // dd($points);
+        // Mapear dados para o formato solicitado
+        $mappedData = $points->getCollection()->map(function ($point) {
+            // Buscar dados do usuário
+            $user = User::find($point->client_id);
+
+            // Calcular saldo antes e depois da transação
+            $balanceBefore = $this->calculateBalanceBefore($point);
+            $balanceAfter = $this->calculateBalanceAfter($point);
+
+            return [
+                'id' => (string) $point->id,
+                'userId' => (string) $point->client_id,
+                'userName' => $user ? $user->name : 'N/A',
+                'userEmail' => $user ? $user->email : 'N/A',
+                'type' => $point->tipo === 'credito' ? 'earned' : 'redeemed',
+                // 'points' => $point->tipo === 'credito' ? (int) $point->valor : -(int) $point->valor,
+                'points' => $point->valor,
+                'description' => $point->description ?? 'N/A',
+                'reference' => $point->pedido_id ?? $point->origem ?? null,
+                'balanceBefore' => (int) $balanceBefore,
+                'balanceAfter' => (int) $balanceAfter,
+                'expirationDate' => $point->data_expiracao ? Carbon::parse($point->data_expiracao)->toISOString() : null,
+                'createdAt' => Carbon::parse($point->created_at)->toISOString(),
+                'createdBy' => $point->autor ? (string) $point->autor : null
+            ];
+        });
+        // dd($mappedData);
+        // Preparar resposta com metadados de paginação
+        return response()->json([
+            'success' => true,
+            'data' => $mappedData,
+            'pagination' => [
+                'current_page' => $points->currentPage(),
+                'per_page' => $points->perPage(),
+                'total' => $points->total(),
+                'last_page' => $points->lastPage(),
+                'from' => $points->firstItem(),
+                'to' => $points->lastItem(),
+                'has_more_pages' => $points->hasMorePages(),
+                'next_page_url' => $points->nextPageUrl(),
+                'prev_page_url' => $points->previousPageUrl(),
+                'total_pages' => $points->lastPage(),
+            ]
+        ]);
+    }
+
+    /**
+     * Obter estatísticas dos extratos de pontos
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getPointsExtractsStats()
+    {
+        try {
+            // Total de transações
+            $totalTransactions = Point::count();
+
+            // Total de pontos ganhos (crédito)
+            $totalEarned = Point::where('tipo', 'credito')->sum('valor');
+
+            // Total de pontos resgatados (débito)
+            $totalRedeemed = Point::where('tipo', 'debito')->sum('valor');
+
+            // Total de pontos expirados (assumindo que há uma coluna status ou data_expiracao)
+            $totalExpired = Point::where('data_expiracao', '<', now())
+                ->where('tipo', 'credito')
+                ->sum('valor');
+
+            // Usuários ativos (que têm pelo menos uma transação)
+            $activeUsers = Point::distinct('client_id')->count('client_id');
+
+            // Total de ajustes (assumindo que ajustes são transações com origem específica)
+            $totalAdjustments = Point::where('origem', 'ajuste')
+                ->orWhere('origem', 'adjustment')
+                ->orWhere('description', 'like', '%ajuste%')
+                ->orWhere('description', 'like', '%adjustment%')
+                ->count();
+
+            // Total de reembolsos (assumindo que reembolsos são transações com origem específica)
+            $totalRefunds = Point::where('origem', 'reembolso')
+                ->orWhere('origem', 'refund')
+                ->orWhere('description', 'like', '%reembolso%')
+                ->orWhere('description', 'like', '%refund%')
+                ->count();
+
+            $stats = [
+                'totalTransactions' => (int) $totalTransactions,
+                'totalEarned' => (int) $totalEarned,
+                'totalRedeemed' => (int) $totalRedeemed,
+                'totalExpired' => (int) $totalExpired,
+                'activeUsers' => (int) $activeUsers,
+                'totalAdjustments' => (int) $totalAdjustments,
+                'totalRefunds' => (int) $totalRefunds
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao obter estatísticas dos pontos',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Criar ajuste manual no extrato de pontos
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createPointsAdjustment(Request $request): JsonResponse
+    {
+        try {
+            // Validar dados de entrada
+            $validated = $request->validate([
+                'user_id' => 'required|string',
+                'points' => 'required|numeric',
+                'description' => 'required|string|max:255',
+                'reason' => 'nullable|string|max:500'
+            ]);
+
+            // Verificar se o usuário existe
+            $user = User::find($validated['user_id']);
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não encontrado'
+                ], 404);
+            }
+
+            // Determinar tipo da transação baseado no valor dos pontos
+            $tipo = $validated['points'] >= 0 ? 'credito' : 'debito';
+            $valorAbsoluto = abs($validated['points']);
+
+            // Criar registro de ajuste
+            $adjustment = Point::create([
+                'client_id' => $validated['user_id'],
+                'valor' => $valorAbsoluto,
+                'tipo' => $tipo,
+                'data' => now()->toDateString(), // Campo obrigatório
+                'origem' => 'ajuste',
+                'description' => $validated['description'],
+                'data_expiracao' => $tipo === 'credito' ? now()->addYear() : null, // Créditos expiram em 1 ano
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            // Calcular novo saldo do usuário
+            $currentBalance = Point::where('client_id', $validated['user_id'])
+                ->where(function($query) {
+                    $query->where('tipo', 'credito')
+                          ->where(function($subQuery) {
+                              $subQuery->whereNull('data_expiracao')
+                                       ->orWhere('data_expiracao', '>', now());
+                          });
+                })
+                ->sum('valor') - Point::where('client_id', $validated['user_id'])
+                ->where('tipo', 'debito')
+                ->sum('valor');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Ajuste criado com sucesso',
+                'data' => [
+                    'adjustment_id' => $adjustment->id,
+                    'user_id' => $validated['user_id'],
+                    'points_adjusted' => $validated['points'],
+                    'type' => $tipo,
+                    'description' => $validated['description'],
+                    'reason' => $validated['reason'],
+                    'new_balance' => (int) $currentBalance,
+                    'created_at' => $adjustment->created_at->toISOString()
+                ]
+            ], 201);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dados inválidos',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao criar ajuste manual',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obter histórico de pontos de um usuário específico
+     * GET /admin/users/{userId}/points-extracts
+     */
+    public function getUserPointsHistory(Request $request, $userId)
+    {
+        $permissionCheck = $this->checkUserPermission('view');
+        if (!$permissionCheck['success']) {
+            return $permissionCheck['response'];
+        }
+
+        // Verificar se o usuário existe
+        $user = User::find($userId);
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuário não encontrado'
+            ], 404);
+        }
+
+        // Parâmetros de paginação e filtros
+        $perPage = $request->get('per_page', 15);
+        $page = $request->get('page', 1);
+        $type = $request->get('type'); // credito, debito
+        $status = $request->get('status'); // ativo, usado, expirado, cancelado
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        $search = $request->get('search');
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
+
+        // Query base para pontos do usuário
+        $query = Point::where('client_id', $userId)
+                     ->where('ativo', 's')
+                     ->where('excluido', 'n')
+                     ->where('deletado', 'n');
+
+        // Aplicar filtros
+        if ($type && in_array($type, ['credito', 'debito'])) {
+            $query->where('tipo', $type);
+        }
+
+        if ($status && in_array($status, ['ativo', 'usado', 'expirado', 'cancelado'])) {
+            $query->where('status', $status);
+        }
+
+        // Filtro por período
+        if ($dateFrom) {
+            $query->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo) {
+            $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // Busca por descrição, origem ou ID do pedido
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
+                  ->orWhere('pedido_id', 'like', "%{$search}%")
+                  ->orWhere('id', 'like', "%{$search}%");
+            });
+        }
+
+        // Ordenação
+        $allowedSortFields = ['id', 'created_at', 'valor', 'tipo', 'status', 'data'];
+        if (in_array($sort, $allowedSortFields)) {
+            $query->orderBy($sort, $order);
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        // Executar query com paginação
+        $points = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Calcular estatísticas do usuário
+        $userStats = [
+            'total_points' => Point::where('client_id', $userId)
+                                  ->where('ativo', 's')
+                                  ->where('excluido', 'n')
+                                  ->where('deletado', 'n')
+                                  ->sum('valor'),
+            'total_earned' => Point::where('client_id', $userId)
+                                  ->where('tipo', 'credito')
+                                  ->where('ativo', 's')
+                                  ->where('excluido', 'n')
+                                  ->where('deletado', 'n')
+                                  ->sum('valor'),
+            'total_spent' => Point::where('client_id', $userId)
+                                 ->where('tipo', 'debito')
+                                 ->where('ativo', 's')
+                                 ->where('excluido', 'n')
+                                 ->where('deletado', 'n')
+                                 ->sum('valor'),
+            'total_transactions' => Point::where('client_id', $userId)
+                                        ->where('ativo', 's')
+                                        ->where('excluido', 'n')
+                                        ->where('deletado', 'n')
+                                        ->count(),
+            'active_points' => Point::where('client_id', $userId)
+                                   ->where('status', 'ativo')
+                                   ->where('ativo', 's')
+                                   ->where('excluido', 'n')
+                                   ->where('deletado', 'n')
+                                   ->sum('valor'),
+            'expired_points' => Point::where('client_id', $userId)
+                                    ->where('status', 'expirado')
+                                    ->where('ativo', 's')
+                                    ->where('excluido', 'n')
+                                    ->where('deletado', 'n')
+                                    ->sum('valor')
+        ];
+
+        // Formatar dados de resposta
+        $responseData = [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'cpf' => $user->cpf ?? null
+            ],
+            'stats' => $userStats,
+            'points' => $points->items(),
+            'pagination' => [
+                'current_page' => $points->currentPage(),
+                'last_page' => $points->lastPage(),
+                'per_page' => $points->perPage(),
+                'total' => $points->total(),
+                'from' => $points->firstItem(),
+                'to' => $points->lastItem()
+            ],
+            'filters' => [
+                'type' => $type,
+                'status' => $status,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'search' => $search,
+                'sort' => $sort,
+                'order' => $order
+            ]
+        ];
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Histórico de pontos obtido com sucesso',
+            'data' => $responseData
+        ], 200);
     }
 }

@@ -7,6 +7,7 @@ use App\Services\Qlib;
 use Illuminate\Http\Request;
 use App\Helpers\StringHelper;
 use App\Http\Controllers\Api\PointController;
+use App\Models\User;
 use Database\Seeders\MenuSeeder;
 
 class TesteController extends Controller
@@ -30,15 +31,18 @@ class TesteController extends Controller
         // $ret = Qlib::qoption('url_api_aeroclube');
         $client_id = $request->get('client_id');
         // dd($client_id);
-        $data = [
-            'valor'=>1000,
-            'tipo'=>'credito',
-            'client_id'=>$client_id,
-        ];
-        // dd($data);
-        $ret['movimentacao'] = (new PointController())->createOrUpdate($data);
-        $ret['saldo'] = (new PointController())->saldo($client_id);
-        // dd($ret);
+        // $data = [
+        //     'valor'=>1000,
+        //     'tipo'=>'credito',
+        //     'client_id'=>$client_id,
+        // ];
+        // // dd($data);
+        // $ret['movimentacao'] = (new PointController())->createOrUpdate($data);
+        // $ret['saldo'] = (new PointController())->saldo($client_id);
+        $admins = User::where('permission_id','<=', 2)
+                             ->orWhere('email', 'like', '%admin%')
+                             ->get();
+        dd($admins);
         // $pid = $request->get('id');
         // if($pid){
         //     $ret = (new MenuController)->getMenus($pid);

@@ -22,7 +22,7 @@ class ProductSeeder extends Seeder
             [
                 'name' => 'PIX de R$150,00',
                 'description' => 'Valor de R$150,00, disponibilizado por meio de transferência via PIX para a chave cadastrada pelo participante. Uma recompensa prática e imediata, que pode ser utilizada livremente conforme sua necessidade.',
-                'category' => 1,
+                'category' => 3,
                 'costPrice' => 0.00,
                 'salePrice' => 150.00,
                 'stock' => 100,
@@ -52,7 +52,7 @@ class ProductSeeder extends Seeder
             [
                 'name' => 'Camisa Oi TV - Antena+',
                 'description' => 'Camisa oficial do programa Antena+, desenvolvida em tecido de malha leve e confortável. Perfeita para o dia a dia de trabalho, reforçando sua identidade como credenciado.\n\nImagem do produto no catálogo meramente ilustrativa.',
-                'category' => 1,
+                'category' => 2,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
                 'stock' => 200,
@@ -67,7 +67,7 @@ class ProductSeeder extends Seeder
             [
                 'name' => 'Boné Oi TV - Antena+',
                 'description' => 'Boné oficial com a marca Oi TV Antena+. Garante proteção e estilo, além de fortalecer a imagem profissional junto aos clientes.\n\nImagem do produto no catálogo meramente ilustrativa.',
-                'category' => 1,
+                'category' => 2,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
                 'stock' => 200,
@@ -101,7 +101,7 @@ class ProductSeeder extends Seeder
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
                 'stock' => 30,
-                'points' => '1.100',
+                'points' => '1100',
                 'qtd_for_user' => '10/dia',
                 'delivery_time' => 'Em até 15 dias úteis',
                 'term' => 'Após solicitação não será possível o cancelamento do pedido ou alteração do endereço de entrega.',

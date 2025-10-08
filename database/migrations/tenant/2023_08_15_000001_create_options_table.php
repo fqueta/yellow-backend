@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('value')->nullable();
             $table->enum('ativo', ['s', 'n'])->default('s');
             $table->text('obs')->nullable();
+            $table->text('tags')->nullable();
             $table->enum('excluido', ['s', 'n'])->nullable()->default('n');
             $table->text('reg_excluido')->nullable();
             $table->enum('deletado', ['s', 'n'])->nullable()->default('n');

@@ -75,7 +75,7 @@ class MenuSeeder extends Seeder
         // Pedidos
         $pedidos = Menu::create([
             'title' => 'Clube de Vantagens',
-            'url'   => '/redemptions',
+            'url'   => null,
             'icon'  => 'ClipboardList',
             'order' => 2,
         ]);

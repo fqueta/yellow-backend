@@ -23,9 +23,11 @@ class ClientController extends Controller
     public $routeName;
     public $sec;
     public $permission_client_id;
+    public $permission_id;
     public function __construct()
     {
-        $this->permission_client_id = Qlib::qoption('permission_client_id')??5;
+        $this->permission_id = Qlib::qoption('permission_client_id')??6;
+        $this->permission_client_id = $this->permission_id;
         $route = request()->route();
         $this->routeName = $route ? $route->getName() : 'api.clients';
         $this->permissionService = new PermissionService();
@@ -48,8 +50,7 @@ class ClientController extends Controller
         $perPage = $request->input('per_page', 10);
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
-
-        $query = Client::query()->orderBy($order_by, $order);
+        $query = Client::query()->where('permission_id','=', $this->permission_client_id)->orderBy($order_by, $order);
 
         // Não exibir registros marcados como deletados ou excluídos
         $query->where(function($q) {
@@ -265,9 +266,9 @@ class ClientController extends Controller
         $validated['ativo'] = isset($validated['ativo']) ? $validated['ativo'] : 's';
         $validated['status'] = $status;
         $validated['tipo_pessoa'] = isset($validated['tipo_pessoa']) ? $validated['tipo_pessoa'] : 'pf';
-        $validated['permission_id'] = $this->permission_client_id;
+        $validated['permission_id'] = $this->permission_id;
         $validated['config'] = isset($validated['config']) ? $this->sanitizeInput($validated['config']) : [];
-
+        // dd($validated,$this->permission_id);
         // if(isset($validated['config']) && is_array($validated['config'])){
         //     $validated['config'] = json_encode($validated['config']);
         // }
@@ -450,6 +451,7 @@ class ClientController extends Controller
             'genero' => $request->get('genero') ? $request->get('genero') : 'ni',
             'name' => $request->get('name') ? $request->get('name') : 'Pre cadastro '.$request->get('cpf'),
             'status' => 'pre_registred',
+            'permission_id' => $this->permission_id,
             'cpf' => $cpf,
             'autor' => $request->user()->id,
         ]);
@@ -470,6 +472,7 @@ class ClientController extends Controller
             'points'        => 'nullable|string|max:255',
             'cpf'           => 'nullable|string|max:20|unique:users,cpf',
             'genero'        => ['required', Rule::in(['ni','m','f'])],
+            'permission_id' => ['required', Rule::in([$this->permission_id])],
             'status'        => ['required', Rule::in(['actived','inactived','pre_registred'])],
             'autor'         => 'nullable|string|max:255',
         ]);
@@ -698,6 +701,8 @@ class ClientController extends Controller
             $d_salvar['password'] = Hash::make($d_salvar['password']);
         }
         $d_salvar['status'] = 'actived';
+        // $d_salvar['permission_id'] = $client->permission_id;
+
         try {
             //code...
             //Enviar cadastro para API da alloyal

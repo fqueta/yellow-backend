@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
@@ -29,12 +30,14 @@ class Redemption extends Model
         'user_id',
         'product_id',
         'quantity',
+        'pontos', // Campo legacy para compatibilidade
         'points_used',
         'unit_points',
         'status',
         'delivery_address',
         'estimated_delivery_date',
         'actual_delivery_date',
+        'config',
         'notes',
         'admin_notes',
         'product_snapshot',
@@ -66,6 +69,7 @@ class Redemption extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+        'config' => 'array',
     ];
 
     /**
@@ -111,6 +115,14 @@ class Redemption extends Model
     }
 
     /**
+     * Relacionamento com o histórico de status
+     */
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(RedemptionStatusHistory::class)->latest();
+    }
+
+    /**
      * Scope para registros ativos
      */
     public function scopeAtivos($query)
@@ -129,11 +141,11 @@ class Redemption extends Model
     }
 
     /**
-     * Scope para resgates aprovados
+     * Scope para resgates confirmados
      */
-    public function scopeAprovados($query)
+    public function scopeConfirmados($query)
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', 'confirmed');
     }
 
     /**
@@ -207,8 +219,8 @@ class Redemption extends Model
     {
         $labels = [
             'pending' => 'Pendente',
-            'approved' => 'Aprovado',
             'processing' => 'Processando',
+            'confirmed' => 'Confirmado',
             'shipped' => 'Enviado',
             'delivered' => 'Entregue',
             'cancelled' => 'Cancelado',
