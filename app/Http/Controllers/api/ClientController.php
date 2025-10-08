@@ -50,7 +50,7 @@ class ClientController extends Controller
         $perPage = $request->input('per_page', 10);
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
-        $query = Client::query()->where('permission_id','=', $this->permission_client_id)->orderBy($order_by, $order);
+        $query = Client::query()->where('permission_id','=', $this->permission_id)->orderBy($order_by, $order);
 
         // Não exibir registros marcados como deletados ou excluídos
         $query->where(function($q) {
@@ -585,6 +585,7 @@ class ClientController extends Controller
         //         ], 422);
         //     }
         // }
+        $clientData['permission_id'] = $this->permission_id;
         $client = Client::create($clientData);
         $alloyal = null;
         //verifica se foi salvo com sucesso antes de enviar para Alloyal

@@ -16,14 +16,14 @@ class Client extends User
     //     static::addGlobalScope('clients_only', function (Builder $builder) {
     //         $builder->where('permission_id', Qlib::qoption('permission_client_id')??6);
     //     });
-    //     
+    //
     //     // Definir permission_id automaticamente ao criar
     //     static::creating(function ($client) {
     //         if (empty($client->permission_id)) {
     //             $client->permission_id = Qlib::qoption('permission_client_id')??6;
     //         }
     //     });
-    //     
+    //
     //     // Definir permission_id automaticamente ao atualizar
     //     static::updating(function ($client) {
     //         if (empty($client->permission_id)) {
@@ -43,7 +43,7 @@ class Client extends User
         'status',
         'genero',
         'verificado',
-        // 'permission_id', // Removido pois a coluna não existe
+        'permission_id',
         'config',
         'preferencias',
         'foto_perfil',
