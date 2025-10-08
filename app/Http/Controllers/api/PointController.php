@@ -905,7 +905,7 @@ class PointController extends Controller
 
     /**
      * Criar ajuste manual no extrato de pontos
-     * 
+     *
      * @param Request $request
      * @return JsonResponse
      */

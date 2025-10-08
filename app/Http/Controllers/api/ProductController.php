@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\api;
 
-use App\Http\Controllers\Api\PointController;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\PointController;
 use App\Models\Product;
 use App\Services\PermissionService;
 use App\Services\Qlib;

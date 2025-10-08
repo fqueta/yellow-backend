@@ -115,7 +115,7 @@ class ClientController extends Controller
                 return $client;
             });
         } catch (\Exception $e) {
-            \Log::error('Error in ClientController transform: ' . $e->getMessage());
+            Log::error('Error in ClientController transform: ' . $e->getMessage());
             throw $e;
         }
         if($request->segment(4) == 'registred'){
