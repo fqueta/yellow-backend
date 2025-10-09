@@ -20,6 +20,7 @@ class User extends Authenticatable
         'status',
         'genero',
         'verificado',
+        'permission_id',
         'config',
         'preferencias',
         'foto_perfil',
@@ -46,25 +47,15 @@ class User extends Authenticatable
     public $incrementing = false;   // 👈 precisa porque o id não é int
     protected $keyType = 'string';  // 👈 precisa porque UUID é string
     // RELACIONAMENTOS
-    // Relacionamentos com permission removidos pois a coluna permission_id não existe na tabela users
-    
-    // public function permission()
-    // {
-    //     return $this->belongsTo(Permission::class);
-    // }
+    public function permission()
+    {
+        return $this->belongsTo(Permission::class);
+    }
 
-    // public function menus()
-    // {
-    //     // Relacionamento através da permission_id do usuário
-    //     return $this->hasManyThrough(
-    //         Menu::class,
-    //         'App\Models\MenuPermission',
-    //         'permission_id', // chave estrangeira na tabela menu_permission
-    //         'id', // chave estrangeira na tabela menus
-    //         'permission_id', // chave local na tabela users
-    //         'menu_id' // chave local na tabela menu_permission
-    //     );
-    // }
+    public function menus()
+    {
+        return $this->belongsToMany(Menu::class, 'menu_permission', 'permission_id', 'menu_id');
+    }
 
 
     // MÉTODO PARA RETORNAR MENUS FORMATADOS

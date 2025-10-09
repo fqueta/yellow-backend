@@ -56,18 +56,20 @@ class AuthController extends Controller
         // $filteredMenu = $this->filterMenuByPermissions($menu, $allowedPermissions);
         $filteredMenu = (new MenuController)->getMenus($pid);
         $token = $user->createToken('developer')->plainTextToken;
-        if($pid>=Qlib::qoption('permission_partner_id')){
+        if($pid==Qlib::qoption('permission_partner_id')){
             return response()->json([
                 'user' => ['id'=>$user->id,'email'=>$user->email,'name'=>$user->name],
-                // 'permissions' => $allowedPermissions,
                 'token' => $token,
-                // 'menu' => $filteredMenu,
-                // 'redirect' => $group->redirect_login ?? '/home',
+                'menu' => $filteredMenu,
+            ]);
+        }elseif($pid>Qlib::qoption('permission_client_id')){
+            return response()->json([
+                'user' => ['id'=>$user->id,'email'=>$user->email,'name'=>$user->name],
+                'token' => $token,
             ]);
         }else{
             return response()->json([
                 'user' => $user,
-                // 'permissions' => $allowedPermissions,
                 'token' => $token,
                 'menu' => $filteredMenu,
                 'redirect' => $group->redirect_login ?? '/home',

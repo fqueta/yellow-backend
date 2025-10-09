@@ -63,12 +63,16 @@ class PartnerController extends Controller
         if (!$this->permissionService->isHasPermission('view')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-
+        $permission_id = $user->permission_id;
         $perPage = $request->input('per_page', 10);
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
-
-        $query = Partner::where('deletado', 'n')->orderBy($order_by, $order);
+        if($permission_id == $this->partner_permission_id || $permission_id>$this->partner_permission_id){
+            // dd($permission_id,$this->partner_permission_id);
+            $query = Partner::where('deletado', 'n')->where('id', $user->id)->orderBy($order_by, $order);
+        }else{
+            $query = Partner::where('deletado', 'n')->orderBy($order_by, $order);
+        }
 
         // Filtros de busca
         if ($request->filled('email')) {
@@ -276,7 +280,7 @@ class PartnerController extends Controller
         } else {
             unset($validated['password']);
         }
-
+        // dd($validated);
         // Garantir que permission_id seja sempre 5 (parceiro)
         $validated['permission_id'] = $this->partner_permission_id;
 
@@ -287,13 +291,13 @@ class PartnerController extends Controller
                 $validated['config'] = json_encode($validated['config']);
             }
         }
-        // dd($validated);
         $partnerToUpdate->update($validated);
 
         // Converter config para array na resposta
         if (is_string($partnerToUpdate->config)) {
             $partnerToUpdate->config = json_decode($partnerToUpdate->config, true) ?? [];
         }
+        // dd($partnerToUpdate,$id);
 
         $ret['data'] = $partnerToUpdate;
         $ret['message'] = 'Parceiro atualizado com sucesso';
