@@ -36,7 +36,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Kit com Receptor DTH e Antena',
-                'description' => 'Conjunto para recepção do sinal Oi TV via satélite, composto por um receptor DTH e uma antena. Ideal para reposição ou novas instalações.\n\nImagem do produto no catálogo meramente ilustrativa.',
+                'description' => 'Conjunto para recepção do sinal Oi TV via satélite, composto por um receptor DTH e uma antena. Ideal para reposição ou novas instalações.<br><br>Imagem do produto no catálogo meramente ilustrativa.',
                 'category' => 1,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
