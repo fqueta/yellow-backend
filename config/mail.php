@@ -49,9 +49,9 @@ return [
             // Configurações SSL específicas para Brevo no Rocky Linux
             'stream' => [
                 'ssl' => [
-                    'verify_peer' => true,
-                    'verify_peer_name' => true,
-                    'allow_self_signed' => false,
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,
                     'cafile' => '/etc/pki/tls/certs/ca-bundle.crt',
                 ],
             ],
