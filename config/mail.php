@@ -46,13 +46,13 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
-            // Configurações SSL específicas para Brevo
+            // Configurações SSL específicas para Brevo no Rocky Linux
             'stream' => [
                 'ssl' => [
                     'verify_peer' => true,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true,
-                    'cafile' => '/etc/ssl/certs/ca-certificates.crt',
+                    'verify_peer_name' => true,
+                    'allow_self_signed' => false,
+                    'cafile' => '/etc/pki/tls/certs/ca-bundle.crt',
                 ],
             ],
         ],
