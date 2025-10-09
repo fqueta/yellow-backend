@@ -51,7 +51,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Camisa Oi TV - Antena+',
-                'description' => 'Camisa oficial do programa Antena+, desenvolvida em tecido de malha leve e confortável. Perfeita para o dia a dia de trabalho, reforçando sua identidade como credenciado.\n\nImagem do produto no catálogo meramente ilustrativa.',
+                'description' => 'Camisa oficial do programa Antena+, desenvolvida em tecido de malha leve e confortável. Perfeita para o dia a dia de trabalho, reforçando sua identidade como credenciado.<br><br>Imagem do produto no catálogo meramente ilustrativa.',
                 'category' => 2,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
@@ -66,7 +66,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Boné Oi TV - Antena+',
-                'description' => 'Boné oficial com a marca Oi TV Antena+. Garante proteção e estilo, além de fortalecer a imagem profissional junto aos clientes.\n\nImagem do produto no catálogo meramente ilustrativa.',
+                'description' => 'Boné oficial com a marca Oi TV Antena+. Garante proteção e estilo, além de fortalecer a imagem profissional junto aos clientes.<br></br>Imagem do produto no catálogo meramente ilustrativa.',
                 'category' => 2,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
@@ -81,7 +81,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Kit instalação: 2 Receptores DTH, 1 Antena  e Cabo',
-                'description' => 'Pacote completo para instalação de novos clientes, incluindo dois receptores DTH, uma antena e cabo de conexão. Proporciona praticidade para atender com rapidez e eficiência.\n\nImagem do produto no catálogo meramente ilustrativa.',
+                'description' => 'Pacote completo para instalação de novos clientes, incluindo dois receptores DTH, uma antena e cabo de conexão. Proporciona praticidade para atender com rapidez e eficiência.<br><br>Imagem do produto no catálogo meramente ilustrativa.',
                 'category' => 1,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
@@ -96,7 +96,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Satlink',
-                'description' => 'Medidor de sinal via satélite utilizado para alinhamento preciso de antenas. Ferramenta profissional indispensável para otimizar a qualidade do serviço prestado.\n\nImagem do produto no catálogo meramente ilustrativa.',
+                'description' => 'Medidor de sinal via satélite utilizado para alinhamento preciso de antenas. Ferramenta profissional indispensável para otimizar a qualidade do serviço prestado.<br><br>Imagem do produto no catálogo meramente ilustrativa.',
                 'category' => 1,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,
@@ -108,8 +108,53 @@ class ProductSeeder extends Seeder
                 'police' => 'Necessário ser credenciado ativo Antena+ na Oi TV e ter saldo de pontos suficientes para resgate no Clube Yellow.',
                 'term2' => 'Após confirmação de resgate, o produto será entregue no prazo de até 15 dias úteis no endereço informado no momento do resgate.',
                 'image' => '/storage/products/Logo do Produto - Satlink.jpg'
-            ]
+            ],
+            [
+                'name' => 'Controle remoto Oi TV - DTH',
+                'description' => 'O controle remoto oficial da Oi TV foi desenvolvido para oferecer praticidade e facilidade no uso do seu receptor DTH. Com design ergonômico, teclas de acesso rápido e resposta ágil, ele garante mais conforto na hora de navegar pelos canais, ajustar o volume e acessar as principais funções do seu aparelho.
+                <ul>
+                    <li>✔️ Compatibilidade: exclusivo para receptores Oi TV via satélite (DTH)</li>
+                    <li>✔️ Funcionalidade: comandos completos para todas as funções do equipamento</li>
+                    <li>✔️ Conforto: leve, compacto e de fácil manuseio</li>
+                    <li>✔️ Praticidade: teclas de atalho para menu, guia de programação e controle de áudio/vídeo</li>
+                </ul>
+                Ideal para substituição ou como controle reserva, mantendo sua experiência de entretenimento sempre completa.',
+                'category' => 1,
+                'costPrice' => 0.00,
+                'salePrice' => 0.00,
+                'stock' => 50,
+                'points' => '200',
+                'qtd_for_user' => '10/dia',
+                'delivery_time' => 'Em até 15 dias úteis',
+                'term' => 'Após solicitação não será possível o cancelamento do pedido ou alteração do endereço de entrega.',
+                'police' => 'Necessário ser credenciado ativo Antena+ na Oi TV e ter saldo de pontos suficientes para resgate no Clube Yellow.',
+                'term2' => 'Após confirmação de resgate, o produto será entregue no prazo de até 15 dias úteis no endereço informado no momento do resgate.',
+                'image' => '/storage/products/LOGO DA CAMPANHA.jpg'
+            ],
+            [
+                'name' => 'Fonte de alimentação para receptor Oi TV - DTH',
+                'description' => 'O controle remoto oficial da Oi TV foi desenvolvido para oferecer praticidade e facilidade no uso do seu receptor DTH. Com design ergonômico, teclas de acesso rápido e resposta ágil, ele garante mais conforto na hora de navegar pelos canais, ajustar o volume e acessar as principais funções do seu aparelho.
+                <ul>
+                    <li>✔️ Compatibilidade: exclusivo para receptores Oi TV via satélite (DTH)</li>
+                    <li>✔️ Funcionalidade: comandos completos para todas as funções do equipamento</li>
+                    <li>✔️ Conforto: leve, compacto e de fácil manuseio</li>
+                    <li>✔️ Praticidade: teclas de atalho para menu, guia de programação e controle de áudio/vídeo</li>
+                </ul>
+                Ideal para substituição ou como controle reserva, mantendo sua experiência de entretenimento sempre completa.',
+                'category' => 1,
+                'costPrice' => 0.00,
+                'salePrice' => 0.00,
+                'stock' => 50,
+                'points' => '200',
+                'qtd_for_user' => '10/dia',
+                'delivery_time' => 'Em até 15 dias úteis',
+                'term' => 'Após solicitação não será possível o cancelamento do pedido ou alteração do endereço de entrega.',
+                'police' => 'Necessário ser credenciado ativo Antena+ na Oi TV e ter saldo de pontos suficientes para resgate no Clube Yellow.',
+                'term2' => 'Após confirmação de resgate, o produto será entregue no prazo de até 15 dias úteis no endereço informado no momento do resgate.',
+                'image' => '/storage/products/LOGO DA CAMPANHA.jpg'
+            ],
         ];
+        DB::table('posts')->where('post_type', 'products')->delete();
 
         foreach ($products as $product) {
             // Gerar slug único
@@ -134,7 +179,6 @@ class ProductSeeder extends Seeder
                 'image' => $product['image'],
                 'inStock' => true,
             ];
-
             // Inserir produto na tabela posts
             DB::table('posts')->insert([
                 'post_author' => '1', // ID do usuário admin
