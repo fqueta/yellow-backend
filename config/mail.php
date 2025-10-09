@@ -50,7 +50,7 @@ return [
             'stream' => [
                 'ssl' => [
                     'verify_peer' => false,
-                    'verify_peer_name' => true,
+                    'verify_peer_name' => false,
                     'allow_self_signed' => false,
                     'cafile' => '/etc/pki/tls/certs/ca-bundle.crt',
                 ],
