@@ -68,7 +68,7 @@ class SendRedemptionNotification implements ShouldQueue
                     $this->redemption,
                     $this->quantity,
                     $this->pointsUsed,
-                    $admins->toArray()
+                    $admins
                 );
 
                 if ($adminEmailResult['success']) {

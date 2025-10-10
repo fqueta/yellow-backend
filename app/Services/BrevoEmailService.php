@@ -153,7 +153,7 @@ class BrevoEmailService
         $redemption,
         int $quantity,
         int $pointsUsed,
-        array $admins
+        $admins
     ): array {
         $to = [];
         foreach ($admins as $admin) {
