@@ -2,21 +2,19 @@
 
 namespace App\Jobs;
 
-use App\Models\User;
-use App\Models\Product;
-use App\Models\Redemption;
-use App\Notifications\RedemptionSuccessNotification;
-use App\Notifications\AdminRedemptionNotification;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Services\BrevoEmailService;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
+use App\Models\User;
+use Exception;
 
 class SendRedemptionNotification implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $user;
     public $product;
@@ -27,7 +25,7 @@ class SendRedemptionNotification implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct($user, $product, $redemption, int $quantity, int $pointsUsed)
+    public function __construct($user, $product, $redemption, $quantity, $pointsUsed)
     {
         $this->user = $user;
         $this->product = $product;
@@ -42,54 +40,63 @@ class SendRedemptionNotification implements ShouldQueue
     public function handle(): void
     {
         try {
-            // Registrar execução do job
-            Log::info('Job de notificação de resgate iniciado', [
-                'user_email' => $this->user->email ?? 'N/A',
-                'product_name' => $this->product->name ?? 'N/A',
-                'quantity' => $this->quantity,
-                'points_used' => $this->pointsUsed
-            ]);
+            $brevoService = new BrevoEmailService();
 
-            // Por enquanto, apenas simular o envio de notificações
-            // TODO: Implementar envio real de emails quando o sistema estiver configurado
+            // Enviar notificação de sucesso para o usuário
+            $userEmailResult = $brevoService->sendRedemptionSuccessNotification(
+                $this->user,
+                $this->product,
+                $this->redemption,
+                $this->quantity,
+                $this->pointsUsed
+            );
 
-            if ($this->user instanceof User) {
-                // Enviar notificação real para o usuário
-                $this->user->notify(new RedemptionSuccessNotification(
+            if ($userEmailResult['success']) {
+                Log::info('Email de resgate enviado para usuário via Brevo', [
+                    'user_id' => $this->user->id,
+                    'message_id' => $userEmailResult['message_id'],
+                    'email' => $this->user->email
+                ]);
+            }
+
+            // Buscar administradores e enviar notificação
+            $admins = User::where('permission_id','<=', 2)->get();
+            if ($admins->count() > 0) {
+                $adminEmailResult = $brevoService->sendAdminRedemptionNotification(
                     $this->user,
                     $this->product,
                     $this->redemption,
                     $this->quantity,
-                    $this->pointsUsed
-                ));
+                    $this->pointsUsed,
+                    $admins->toArray()
+                );
 
-                // Enviar para administradores
-                $admins = User::where('permission_id','<=', 2)
-                            //  ->orWhere('email', 'like', '%admin%')
-                             ->get();
-
-                foreach ($admins as $admin) {
-                    $admin->notify(new AdminRedemptionNotification(
-                        $this->user,
-                        $this->product,
-                        $this->redemption,
-                        $this->quantity,
-                        $this->pointsUsed
-                    ));
-                    Log::info('Job de notificação de resgate concluído com sucesso para admin', [
-                        'admin_email' => $admin->email
+                if ($adminEmailResult['success']) {
+                    Log::info('Email de resgate enviado para administradores via Brevo', [
+                        'admin_count' => $admins->count(),
+                        'message_id' => $adminEmailResult['message_id']
                     ]);
                 }
             }
 
-            Log::info('Job de notificação de resgate concluído com sucesso');
-
-        } catch (\Exception $e) {
-            Log::error('Erro ao processar job de notificação de resgate', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            Log::info('Notificações de resgate processadas com sucesso via Brevo API', [
+                'user_id' => $this->user->id,
+                'product_id' => $this->product->ID,
+                'redemption_id' => $this->redemption->id,
+                'user_email_sent' => $userEmailResult['success'],
+                'admin_emails_sent' => isset($adminEmailResult) ? $adminEmailResult['success'] : false
             ]);
 
+        } catch (Exception $e) {
+            Log::error('Erro ao enviar notificações de resgate via Brevo', [
+                'error' => $e->getMessage(),
+                'user_id' => $this->user->id,
+                'product_id' => $this->product->ID,
+                'redemption_id' => $this->redemption->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // Re-throw para que o job seja marcado como falhado e possa ser reprocessado
             throw $e;
         }
     }

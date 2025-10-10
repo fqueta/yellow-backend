@@ -36,6 +36,7 @@ use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\api\PermissionMenuController;
 use App\Http\Controllers\api\UserController;
+use App\Http\Controllers\api\BrevoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -294,6 +295,14 @@ Route::name('api.')->prefix('api/v1')->middleware([
             Route::get('{id}/menu-permissions', [MenuPermissionController::class, 'show'])->name('menu-permissions.show');
             Route::put('{id}/menu-permissions', [MenuPermissionController::class, 'updatePermissions'])->name('menu-permissions.update');
             // Route::post('{id}/menus', [PermissionMenuController::class, 'update']);
+        });
+
+        // Rotas para Brevo Email Service
+        Route::prefix('brevo')->name('brevo.')->group(function () {
+            Route::get('configuration', [BrevoController::class, 'checkConfiguration'])->name('configuration');
+            Route::get('api-status', [BrevoController::class, 'checkApiStatus'])->name('api-status');
+            Route::post('test-email', [BrevoController::class, 'sendTestEmail'])->name('test-email');
+            Route::post('simulate-redemption', [BrevoController::class, 'simulateRedemptionNotification'])->name('simulate-redemption');
         });
 
     });
