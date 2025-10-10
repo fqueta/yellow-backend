@@ -409,7 +409,7 @@ class UserController extends Controller
         // Validação dos dados recebidos
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:8|confirmed',
+            'new_password' => 'required|string|min:6|confirmed',
             'new_password_confirmation' => 'required|string'
         ]);
 

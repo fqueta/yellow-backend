@@ -104,13 +104,13 @@ Route::name('api.')->prefix('api/v1')->middleware([
     Route::fallback(function () {
         return response()->json(['message' => 'Rota não encontrada'], 404);
     });
+    Route::get('products-public',[ProductController::class,'index_public'])->name('product.public');
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('user',[UserController::class,'perfil'])->name('perfil.user');
         Route::get('user/can',[UserController::class,'can_access'])->name('perfil.can');
         Route::put('user/profile',[UserController::class,'updateProfile'])->name('user.profile.update');
         Route::put('user/change-password',[UserController::class,'changePassword'])->name('user.change.password');
         Route::post('/logout',[AuthController::class,'logout'])->name('logout');
-
         // Rota do dashboard
         Route::get('dashboard', [\App\Http\Controllers\api\DashboardController::class, 'index'])->name('dashboard');
         // Rotas para proprietários (deve vir antes do apiResource)

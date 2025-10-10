@@ -219,6 +219,7 @@ class BrevoEmailService
                             <li><strong>Produto:</strong> {$productName}</li>
                             <li><strong>Quantidade:</strong> {$quantity}</li>
                             <li><strong>Pontos Utilizados:</strong> {$pointsUsed}</li>
+                            <li><strong>CPF:</strong> {$user->cpf}</li>
                             <li><strong>ID do Resgate:</strong> #{$redemption->id}</li>
                             <li><strong>Data:</strong> " . now()->format('d/m/Y H:i') . "</li>
                         </ul>
@@ -281,6 +282,7 @@ class BrevoEmailService
                         <ul>
                             <li><strong>Nome:</strong> {$userName}</li>
                             <li><strong>Email:</strong> {$user->email}</li>
+                            <li><strong>CPF:</strong> {$user->cpf}</li>
                             <li><strong>ID do Cliente:</strong> #{$user->id}</li>
                         </ul>
                     </div>

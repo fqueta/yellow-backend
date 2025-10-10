@@ -189,6 +189,35 @@ class ProductController extends Controller
 
         return response()->json($products);
     }
+    public function index_public(Request $request){
+        $perPage = $request->input('per_page', 10);
+        $order_by = $request->input('order_by', 'created_at');
+        $order = $request->input('order', 'desc');
+        $query = Product::query()
+            ->orderBy($order_by, $order);
+
+        // Filtros opcionais
+        if ($request->filled('name')) {
+            $query->where('post_title', 'like', '%' . $request->input('name') . '%');
+        }
+        if ($request->filled('slug')) {
+            $query->where('post_name', 'like', '%' . $request->input('slug') . '%');
+        }
+        if ($request->filled('active')) {
+            $status = $this->get_status($request->boolean('active'));
+            $query->where('post_status', $status);
+        }
+        if ($request->filled('category')) {
+            $query->where('guid', $request->input('category'));
+        }
+
+        $products = $query->paginate($perPage);
+        // Transformar dados para o formato do frontend
+        $products->getCollection()->transform(function ($item) {
+            return $this->mapDatabaseToFrontend($item);
+        });
+        return response()->json($products);
+    }
     /**
      * Mapeia um produto para o formato do frontend     *
      * @param Product $product
