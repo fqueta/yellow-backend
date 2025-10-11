@@ -356,9 +356,9 @@ class BrevoEmailService
                     if (isset($data['complemento']) && !empty($data['complemento'])) {
                         $endereco .= " - {$data['complemento']}";
                     }
-                    if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
-                        $endereco .= " - {$data['ponto_referencia']}";
-                    }
+                    // if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
+                    //     $endereco .= " - {$data['ponto_referencia']}";
+                    // }
                     $html .= "<li><strong>Endereço:</strong> {$endereco}</li>";
                 }
 
@@ -374,9 +374,9 @@ class BrevoEmailService
                     $html .= "<li><strong>CEP:</strong> {$data['cep']}</li>";
                 }
 
-                // if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
-                //     $html .= "<li><strong>Ponto de Referência:</strong> {$data['ponto_referencia']}</li>";
-                // }
+                if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
+                    $html .= "<li><strong>Ponto de Referência:</strong> {$data['ponto_referencia']}</li>";
+                }
 
                 $html .= "</ul></div>";
             }
