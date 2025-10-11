@@ -623,11 +623,13 @@ class ProductController extends Controller
      */
     public function redeem(Request $request)
     {
+        // dd($request->all());
         try {
             // Validar dados de entrada
             $validator = Validator::make($request->all(), [
                 'product_id' => 'required|integer|exists:posts,ID',
                 'quantity' => 'required|integer|min:1',
+                'config' => 'nullable|array',
             ]);
 
             if ($validator->fails()) {
@@ -697,21 +699,25 @@ class ProductController extends Controller
                     'status' => 400,
                 ], 400);
             }
+            $config = $request->config ?? [];
             //data no padrão brasileiro
             // $dataHoraAtual = now()->format('d/m/Y H:i:s');
             $nomeCliente = $user->name;
-            //ip da conexão do cliente
             $ipCliente = $request->header('X-Forwarded-For') ?? $request->ip();
-            // Criar o registro de resgate
-            $redemption = \App\Models\Redemption::create([
+            $dataSave = [
                 'user_id' => $user->id,
                 'product_id' => $productId,
                 'quantity' => $quantity,
                 'points_used' => $totalPointsNeeded,
                 'unit_points' => $unitPoints,
                 'status' => 'pending',
+                'config' => $config,
                 'notes' => 'Resgate solicitado via Loja de pontos por ' . $nomeCliente.' ::: IP: '.$ipCliente,
-            ]);
+            ];
+            // dd($dataSave);
+            //ip da conexão do cliente
+            // Criar o registro de resgate
+            $redemption = \App\Models\Redemption::create($dataSave);
 
             // Criar snapshot do produto
             $redemption->createProductSnapshot();
