@@ -124,7 +124,7 @@ class BrevoEmailService
         ]];
 
         $subject = 'Resgate de Pontos Realizado com Sucesso!';
-        
+
         $htmlContent = $this->buildRedemptionSuccessHtml(
             $user,
             $product,
@@ -164,7 +164,7 @@ class BrevoEmailService
         }
 
         $subject = 'Novo Resgate de Pontos Realizado - Ação Necessária';
-        
+
         $htmlContent = $this->buildAdminRedemptionHtml(
             $user,
             $product,
@@ -188,7 +188,7 @@ class BrevoEmailService
     ): string {
         $productName = $product->post_title ?? $product->name ?? 'Produto';
         $userName = $user->name ?? $user->email;
-        
+
         return "
         <!DOCTYPE html>
         <html>
@@ -212,7 +212,7 @@ class BrevoEmailService
                 <div class='content'>
                     <p>Olá <strong>{$userName}</strong>,</p>
                     <p>Seu resgate foi processado com sucesso! Aqui estão os detalhes:</p>
-                    
+
                     <div class='highlight'>
                         <h3>Detalhes do Resgate</h3>
                         <ul>
@@ -225,7 +225,7 @@ class BrevoEmailService
                         </ul>
                         " . (!empty($redemption->config) ? $this->formatRedemptionConfig($redemption->config, 'client') : "") . "
                     </div>
-                    
+
                     <p>Em breve você receberá mais informações sobre a entrega do seu produto.</p>
                     <p>Obrigado por usar nosso sistema de pontos!</p>
                 </div>
@@ -250,7 +250,7 @@ class BrevoEmailService
     ): string {
         $productName = $product->post_title ?? $product->name ?? 'Produto';
         $userName = $user->name ?? $user->email;
-        
+
         return "
         <!DOCTYPE html>
         <html>
@@ -277,7 +277,7 @@ class BrevoEmailService
                         <h3>⚠️ Ação Necessária</h3>
                         <p>Um novo resgate foi realizado e requer sua atenção.</p>
                     </div>
-                    
+
                     <div class='user-info'>
                         <h3>Informações do Cliente</h3>
                         <ul>
@@ -287,7 +287,7 @@ class BrevoEmailService
                             <li><strong>ID do Cliente:</strong> #{$user->id}</li>
                         </ul>
                     </div>
-                    
+
                     <h3>Detalhes do Resgate</h3>
                     <ul>
                         <li><strong>Produto:</strong> {$productName}</li>
@@ -298,7 +298,7 @@ class BrevoEmailService
                         <li><strong>Data:</strong> " . now()->format('d/m/Y H:i') . "</li>
                     </ul>
                     " . (!empty($redemption->config) ? $this->formatRedemptionConfig($redemption->config, 'admin') : "") . "
-                    
+
                     <p><strong>Próximos passos:</strong></p>
                     <ol>
                         <li>Verificar disponibilidade do produto</li>
@@ -329,46 +329,55 @@ class BrevoEmailService
             // Se já é um array (devido ao cast do modelo), usar diretamente
             // Se é string, decodificar o JSON
             $data = is_array($config) ? $config : json_decode($config, true);
-            
+
             if (!$data || !is_array($data)) {
                 return "";
             }
-            
+
             $html = "";
-            $containerStyle = $type === 'admin' 
+            $containerStyle = $type === 'admin'
                 ? "style='background: #f0f8ff; padding: 10px; border-left: 4px solid #007bff; margin: 10px 0;'"
                 : "";
-            
+
             // Verificar se são dados de endereço
             if (isset($data['cep']) || isset($data['logradouro'])) {
                 $html = "<div {$containerStyle}>";
                 $html .= "<h4>📍 Informações de Entrega:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
-                
+
                 if (isset($data['logradouro'])) {
                     $endereco = $data['logradouro'];
                     if (isset($data['numero']) && $data['numero'] !== 'sem numero') {
                         $endereco .= ", " . $data['numero'];
                     }
+                    if($data['numero']=='sem numero'){
+                        $endereco .= ", S/N";
+                    }
+                    if (isset($data['complemento']) && !empty($data['complemento'])) {
+                        $endereco .= " - {$data['complemento']}";
+                    }
+                    if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
+                        $endereco .= " - {$data['ponto_referencia']}";
+                    }
                     $html .= "<li><strong>Endereço:</strong> {$endereco}</li>";
                 }
-                
+
                 if (isset($data['bairro'])) {
                     $html .= "<li><strong>Bairro:</strong> {$data['bairro']}</li>";
                 }
-                
+
                 if (isset($data['cidade']) && isset($data['uf'])) {
                     $html .= "<li><strong>Cidade:</strong> {$data['cidade']} - {$data['uf']}</li>";
                 }
-                
+
                 if (isset($data['cep'])) {
                     $html .= "<li><strong>CEP:</strong> {$data['cep']}</li>";
                 }
-                
-                if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
-                    $html .= "<li><strong>Ponto de Referência:</strong> {$data['ponto_referencia']}</li>";
-                }
-                
+
+                // if (isset($data['ponto_referencia']) && !empty($data['ponto_referencia'])) {
+                //     $html .= "<li><strong>Ponto de Referência:</strong> {$data['ponto_referencia']}</li>";
+                // }
+
                 $html .= "</ul></div>";
             }
             // Verificar se são dados de PIX
@@ -376,15 +385,15 @@ class BrevoEmailService
                 $html = "<div {$containerStyle}>";
                 $html .= "<h4>💳 Informações de PIX:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
-                
+
                 if (isset($data['chave_pix'])) {
                     $html .= "<li><strong>Chave PIX:</strong> {$data['chave_pix']}</li>";
                 }
-                
+
                 if (isset($data['confira_pix'])) {
                     $html .= "<li><strong>Confirmação PIX:</strong> {$data['confira_pix']}</li>";
                 }
-                
+
                 $html .= "</ul></div>";
             }
             // Outros tipos de dados
@@ -392,22 +401,22 @@ class BrevoEmailService
                 $html = "<div {$containerStyle}>";
                 $html .= "<h4>ℹ️ Informações Adicionais:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
-                
+
                 foreach ($data as $key => $value) {
                     if (!empty($value)) {
                         $label = ucfirst(str_replace('_', ' ', $key));
                         $html .= "<li><strong>{$label}:</strong> {$value}</li>";
                     }
                 }
-                
+
                 $html .= "</ul></div>";
             }
-            
+
             return $html;
-            
+
         } catch (Exception $e) {
             // Em caso de erro, retornar o JSON original
-            $containerStyle = $type === 'admin' 
+            $containerStyle = $type === 'admin'
                 ? "style='background: #f0f8ff; padding: 10px; border-left: 4px solid #007bff; margin: 10px 0;'"
                 : "";
             return "<div {$containerStyle}><h4>Informações Adicionais:</h4><p>" . htmlspecialchars($config) . "</p></div>";

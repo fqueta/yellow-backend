@@ -286,6 +286,93 @@ class AlloyalController extends Controller
         }
         return null;
     }
+    /***
+     * metodo para solicitar um smartlink atravez de um post 'https://api.lecupon.com/client/v2/businesses/2675/users/89776866018/smart_link'
+     *
+     * @param Request $request
+     * @return json
+     */
+    public function smartLink(Request $request){
+        $cpf = $request->input('cpf');
+        $cpf = str_replace(['.','-'],'',$cpf);
+        $client_id = $this->get_client_id($cpf);
+        if(!$client_id){
+            return ['exec'=>false,'message'=>'Cliente não encontrado'];
+        }
+        $headers = [
+            'X-ClientEmployee-Email' => $this->clientEmployeeEmail,
+            'X-ClientEmployee-Token' => $this->clientEmployeeToken,
+            'Content-Type' => 'application/json'
+        ];
+        $endpoint = $this->endpoint . '/users/'.$cpf.'/smart_link';
+        $url = $this->url_api_aloyall . $endpoint;
+        $response = Http::withHeaders($headers)->post($url);
+        // dd($url,$headers,$response->json());
+        if($response->status() != 200){
+            $ret['exec'] = false;
+            $ret['message'] = 'Erro ao solicitar smartlink, status: ' . $response->status();
+            $ret['message'] .= $response->json()['message'] ?? '';
+            return $ret;
+        }
+        $ret['exec'] = true;
+        $ret['message'] = 'Smartlink solicitado com sucesso';
+        $ret['data'] = $response->json();
+        return $ret;
+    }
+
+    /**
+     * Método para solicitar smartlink via rota GET com CPF como parâmetro
+     *
+     * @param string $cpf
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function smartLinkByCpf(string $cpf)
+    {
+        $cpf = str_replace(['.','-'],'',$cpf);
+        $client_id = $this->get_client_id($cpf);
+
+        if(!$client_id){
+            return response()->json(['exec'=>false,'message'=>'Cliente não encontrado'], 404);
+        }
+
+        $headers = [
+            'X-ClientEmployee-Email' => $this->clientEmployeeEmail,
+            'X-ClientEmployee-Token' => $this->clientEmployeeToken,
+            'Content-Type' => 'application/json'
+        ];
+
+        $endpoint = $this->endpoint . '/users/'.$cpf.'/smart_link';
+        $url = $this->url_api_aloyall . $endpoint;
+
+        try {
+            $response = Http::withHeaders($headers)->post($url);
+
+            if($response->status() != 200){
+                $ret = [
+                    'exec' => false,
+                    'message' => 'Erro ao solicitar smartlink, status: ' . $response->status(),
+                    'details' => $response->json()['message'] ?? 'Erro desconhecido'
+                ];
+                return response()->json($ret, $response->status());
+            }
+
+            $ret = [
+                'exec' => true,
+                'message' => 'Smartlink solicitado com sucesso',
+                'data' => $response->json()
+            ];
+
+            return response()->json($ret, 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'exec' => false,
+                'message' => 'Erro interno ao processar solicitação',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     /**
      * Store a newly created resource in storage.
      */

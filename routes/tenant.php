@@ -37,6 +37,7 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\api\PermissionMenuController;
 use App\Http\Controllers\api\UserController;
 use App\Http\Controllers\api\BrevoController;
+use App\Http\Controllers\api\AlloyalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -304,6 +305,9 @@ Route::name('api.')->prefix('api/v1')->middleware([
             Route::post('test-email', [BrevoController::class, 'sendTestEmail'])->name('test-email');
             Route::post('simulate-redemption', [BrevoController::class, 'simulateRedemptionNotification'])->name('simulate-redemption');
         });
+
+        // Rota para Alloyal SmartLink
+        Route::get('smartlink/{cpf}', [AlloyalController::class, 'smartLinkByCpf'])->name('smartlink.get');
 
     });
 
