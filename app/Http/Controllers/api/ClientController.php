@@ -607,24 +607,6 @@ class ClientController extends Controller
     }
     public function store_active(Request $request, $etp = null)
     {
-        // Log de debug para verificar se o método está sendo executado
-        // \Log::info('ClientController::store_active - Método executado', [
-        //     'request_data' => $request->all(),
-        //     'request_input' => $request->input(),
-        //     'request_json' => $request->json()->all(),
-        //     'content_type' => $request->header('Content-Type'),
-        //     'raw_content' => $request->getContent(),
-        //     'etp' => $etp,
-        //     'timestamp' => now()
-        // ]);
-
-        // // Parse manual do JSON se os dados não estiverem disponíveis via request->all()
-        // $requestData = $request->all();
-        // \Log::info('Debug parse JSON', [
-        //     'requestData_empty' => empty($requestData),
-        //     'has_content' => !empty($request->getContent()),
-        //     'content_length' => strlen($request->getContent())
-        // ]);
 
         if (empty($requestData) && $request->getContent()) {
             // Limpar caracteres UTF-8 malformados
