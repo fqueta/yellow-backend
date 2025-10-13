@@ -294,7 +294,6 @@ class AlloyalController extends Controller
      */
     public function smartLink(Request $request){
         $cpf = $request->input('cpf');
-        $cpf = str_replace(['.','-'],'',$cpf);
         $client_id = $this->get_client_id($cpf);
         if(!$client_id){
             return ['exec'=>false,'message'=>'Cliente não encontrado'];
@@ -328,25 +327,23 @@ class AlloyalController extends Controller
      */
     public function smartLinkByCpf(string $cpf)
     {
-        $cpf = str_replace(['.','-'],'',$cpf);
         $client_id = $this->get_client_id($cpf);
-
         if(!$client_id){
             return response()->json(['exec'=>false,'message'=>'Cliente não encontrado'], 404);
         }
-
+        
         $headers = [
             'X-ClientEmployee-Email' => $this->clientEmployeeEmail,
             'X-ClientEmployee-Token' => $this->clientEmployeeToken,
             'Content-Type' => 'application/json'
         ];
-
+        
         $endpoint = $this->endpoint . '/users/'.$cpf.'/smart_link';
         $url = $this->url_api_aloyall . $endpoint;
-
+        
         try {
             $response = Http::withHeaders($headers)->post($url);
-
+            
             if($response->status() != 200){
                 $ret = [
                     'exec' => false,
@@ -355,15 +352,15 @@ class AlloyalController extends Controller
                 ];
                 return response()->json($ret, $response->status());
             }
-
+            
             $ret = [
                 'exec' => true,
                 'message' => 'Smartlink solicitado com sucesso',
                 'data' => $response->json()
             ];
-
+            
             return response()->json($ret, 200);
-
+            
         } catch (\Exception $e) {
             return response()->json([
                 'exec' => false,

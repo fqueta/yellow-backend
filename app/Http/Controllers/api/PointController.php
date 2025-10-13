@@ -811,7 +811,7 @@ class PointController extends Controller
                 'type' => $point->tipo === 'credito' ? 'earned' : 'redeemed',
                 // 'points' => $point->tipo === 'credito' ? (int) $point->valor : -(int) $point->valor,
                 'points' => $point->valor,
-                'description' => $point->description ?? 'N/A',
+                'description' => $point->description ?? 'Via API',
                 'reference' => $point->pedido_id ?? $point->origem ?? null,
                 'balanceBefore' => (int) $balanceBefore,
                 'balanceAfter' => (int) $balanceAfter,
