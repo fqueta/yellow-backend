@@ -119,6 +119,7 @@ class ProductController extends Controller
             'id' => $product->ID,
             'name' => $product->post_title, // post_title -> name
             'description' => $product->post_content, // post_content -> description
+            'shortDescription' => $product->post_excerpt, // post_excerpt -> shortDescription
             'slug' => $product->post_name,
             'active' => $this->decode_status($product->post_status), // post_status -> active
             'isActive' => $isActive, // true se estoque > 0, false caso contrário

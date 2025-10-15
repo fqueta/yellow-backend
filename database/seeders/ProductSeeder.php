@@ -133,14 +133,14 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Fonte de alimentação para receptor Oi TV - DTH',
-                'description' => 'O controle remoto oficial da Oi TV foi desenvolvido para oferecer praticidade e facilidade no uso do seu receptor DTH. Com design ergonômico, teclas de acesso rápido e resposta ágil, ele garante mais conforto na hora de navegar pelos canais, ajustar o volume e acessar as principais funções do seu aparelho.
+                'description' => 'A fonte original da Oi TV garante energia estável e segura para o funcionamento do seu receptor DTH. Projetada especialmente para os aparelhos da Oi TV, ela assegura melhor desempenho, proteção contra variações elétricas e maior durabilidade do equipamento.
                 <ul>
-                    <li>✔️ Compatibilidade: exclusivo para receptores Oi TV via satélite (DTH)</li>
-                    <li>✔️ Funcionalidade: comandos completos para todas as funções do equipamento</li>
-                    <li>✔️ Conforto: leve, compacto e de fácil manuseio</li>
-                    <li>✔️ Praticidade: teclas de atalho para menu, guia de programação e controle de áudio/vídeo</li>
+                    <li>✔️ Compatibilidade: exclusiva para receptores Oi TV via satélite (DTH)</li>
+                    <li>✔️ Segurança: proteção contra sobrecarga e curto-circuito</li>
+                    <li>✔️ Estabilidade: fornece a energia ideal para o funcionamento contínuo do receptor</li>
+                    <li>✔️ Praticidade: leve, compacta e fácil de instalar</li>
                 </ul>
-                Ideal para substituição ou como controle reserva, mantendo sua experiência de entretenimento sempre completa.',
+                Perfeita para substituição da fonte original ou como peça reserva, garantindo que seu receptor esteja sempre pronto para uso.',
                 'category' => 1,
                 'costPrice' => 0.00,
                 'salePrice' => 0.00,

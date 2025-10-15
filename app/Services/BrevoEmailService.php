@@ -342,6 +342,12 @@ class BrevoEmailService
             // Verificar se são dados de endereço
             if (isset($data['cep']) || isset($data['logradouro'])) {
                 $html = "<div {$containerStyle}>";
+                $html .= "<h4> Instruções importantes:</h4>";
+                $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
+                $html .= "<li>✔️ O item resgatado será entregue em até 20 dias úteis após geração de código de rastreio.</li>";
+                $html .= "<li>✔️ Verifique se os dados de endereço estão corretos antes do resgate.</li>";
+                $html .= "<li>✔️ Não será possível alterar os dados após solicitação.</li>";
+                $html .= "</ul>";
                 $html .= "<h4>📍 Informações de Entrega:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
 
@@ -383,6 +389,12 @@ class BrevoEmailService
             // Verificar se são dados de PIX
             elseif (isset($data['chave_pix']) || isset($data['confira_pix'])) {
                 $html = "<div {$containerStyle}>";
+                $html .= "<h4> Instruções importantes:</h4>";
+                $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
+                $html .= "<li>✔️ O PIX será processado em até 10 dias úteis</li>";
+                $html .= "<li>✔️ Verifique se a chave PIX está correta</li>";
+                $html .= "<li>✔️ Não é possível alterar os dados após confirmação</li>";
+                $html .= "</ul>";
                 $html .= "<h4>💳 Informações de PIX:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
 
