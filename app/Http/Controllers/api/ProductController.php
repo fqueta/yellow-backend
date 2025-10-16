@@ -106,8 +106,12 @@ class ProductController extends Controller
             $product = (object)$product;
         }
         $image = $product->config['image'] ?? null;
+        $image2 = $product->config['image2'] ?? null;
         if($image){
             $image = str_replace('{image}',$image, Qlib::qoption('link_files'));
+        }
+        if($image2){
+            $image2 = str_replace('{image}',$image2, Qlib::qoption('link_files'));
         }
         $product_image = $image;
         $pc = new PointController();
@@ -132,6 +136,7 @@ class ProductController extends Controller
             'unit' => $product->config['unit'] ?? null,
             'pointsRequired' => $product->config['points'] ?? null,
             'image' => $product_image,
+            'image2' => $image2,
             'rating' => $product->config['rating'] ?? null,
             'reviews' => $product->config['reviews'] ?? null,
             'slug' => $product->post_name ?? null,
