@@ -112,7 +112,7 @@ class RedeemController extends Controller
         $user = $redemption->user;
         $categoryData = null;
         $productImage = null;
-
+        $productImage2 = null;
         if ($product) {
             // Obter dados da categoria apenas se guid não for null
             if (!empty($product->guid)) {
@@ -127,6 +127,11 @@ class RedeemController extends Controller
             $image = $product->config['image'] ?? null;
             if ($image) {
                 $productImage = str_replace('{image}', $image, Qlib::qoption('link_files'));
+            }
+            // Obter segunda imagem do produto
+            $image2 = $product->config['image2'] ?? null;
+            if ($image2) {
+                $productImage2 = str_replace('{image}', $image2, Qlib::qoption('link_files'));
             }
         }
 
@@ -175,6 +180,7 @@ class RedeemController extends Controller
             'productId' => $product ? 'P' . str_pad($product->ID, 3, '0', STR_PAD_LEFT) : null,
             'productName' => $product ? $product->post_title : 'Produto não encontrado',
             'productImage' => $productImage ?: '/placeholder.svg',
+            'productImage2' => $productImage2 ?: '',
             'productCategory' => $categoryData['name'] ?? 'Categoria não definida',
             'pointsUsed' => (int)$redemption->points_used,
             'status' => $this->mapRedemptionStatus($redemption->status),

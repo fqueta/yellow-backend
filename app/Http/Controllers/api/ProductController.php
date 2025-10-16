@@ -809,15 +809,20 @@ class ProductController extends Controller
                 $product = $redemption->product;
                 $categoryData = null;
                 $productImage = null;
-
+                $productImage2 = null;
                 if ($product) {
                      // Obter dados da categoria
                      $categoryData = \App\Services\Qlib::get_category_by_id($product->guid);
 
                      // Obter imagem do produto
                      $image = $product->config['image'] ?? null;
+                     // Obter segunda imagem do produto
+                     $image2 = $product->config['image2'] ?? null;
                      if ($image) {
                          $productImage = str_replace('{image}', $image, \App\Services\Qlib::qoption('link_files'));
+                     }
+                     if ($image2) {
+                         $productImage2 = str_replace('{image}', $image2, \App\Services\Qlib::qoption('link_files'));
                      }
                  }
 
@@ -830,6 +835,7 @@ class ProductController extends Controller
                     'productId' => (string)$redemption->product_id,
                     'productName' => $product ? $product->post_title : 'Produto não encontrado',
                     'productImage' => $productImage ?: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
+                    'productImage2' => $productImage2 ?: '',
                     'pointsUsed' => (int)$redemption->points_used,
                     'redemptionDate' => $redemption->created_at->format('Y-m-d'),
                     'status' => $this->mapRedemptionStatus($redemption->status),
