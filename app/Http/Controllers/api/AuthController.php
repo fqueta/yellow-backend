@@ -33,7 +33,13 @@ class AuthController extends Controller
       public function login(Request $request)
     {
         $credentials = $request->only('email', 'password');
-
+        //não pode permitir login de cliente com status desativado ou excluido
+        $client = DB::table('users')->where('email',$credentials['email'])->first();
+        if($client){
+            if($client->status!='actived' || $client->excluido=='s'){
+                return response()->json(['message' => 'Cliente não existe'], 403);
+            }
+        }
         if (!Auth::attempt($credentials)) {
             return response()->json(['message' => 'Credenciais inválidas'], 401);
         }

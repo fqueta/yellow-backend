@@ -158,6 +158,20 @@ class AlloyalController extends Controller
         }
     }
     /**
+     * Metodo para verificar se um usuario é cliente enviado para alloyal
+     */
+    public function is_alloyal($cpf){
+        $client_id = $this->get_client_id($cpf);
+        if(!$client_id){
+            return ['exec'=>false,'message'=>'Cliente não encontrado'];
+        }
+        $is_alloyal = Qlib::get_usermeta($client_id,'is_alloyal');
+        if($is_alloyal){
+            return ['exec'=>true,'message'=>'Cliente é alloyal'];
+        }
+        return ['exec'=>false,'message'=>'Cliente não é alloyal'];
+    }
+    /**
      * Ativar um usuário
      */
     public function ativate($d_send){
@@ -293,6 +307,7 @@ class AlloyalController extends Controller
      * @return json
      */
     public function smartLink(Request $request){
+        dd($request->all());
         $cpf = $request->input('cpf');
         $client_id = $this->get_client_id($cpf);
         if(!$client_id){
@@ -304,6 +319,7 @@ class AlloyalController extends Controller
             'Content-Type' => 'application/json'
         ];
         $endpoint = $this->endpoint . '/users/'.$cpf.'/smart_link';
+        dd($endpoint);
         $url = $this->url_api_aloyall . $endpoint;
         $response = Http::withHeaders($headers)->post($url);
         // dd($url,$headers,$response->json());
@@ -331,36 +347,37 @@ class AlloyalController extends Controller
         if(!$client_id){
             return response()->json(['exec'=>false,'message'=>'Cliente não encontrado'], 404);
         }
-        
+
         $headers = [
             'X-ClientEmployee-Email' => $this->clientEmployeeEmail,
             'X-ClientEmployee-Token' => $this->clientEmployeeToken,
             'Content-Type' => 'application/json'
         ];
-        
+
         $endpoint = $this->endpoint . '/users/'.$cpf.'/smart_link';
         $url = $this->url_api_aloyall . $endpoint;
-        
+        // dd($url);
         try {
             $response = Http::withHeaders($headers)->post($url);
-            
+            // dd($url,$headers,$response->json());
             if($response->status() != 200){
+                $error = $response->json()['error'] ?? 'Erro desconhecido';
                 $ret = [
                     'exec' => false,
-                    'message' => 'Erro ao solicitar smartlink, status: ' . $response->status(),
+                    'message' => $error ?? 'Erro ao solicitar smartlink, status: ' . $response->status(),
                     'details' => $response->json()['message'] ?? 'Erro desconhecido'
                 ];
                 return response()->json($ret, $response->status());
             }
-            
+
             $ret = [
                 'exec' => true,
                 'message' => 'Smartlink solicitado com sucesso',
                 'data' => $response->json()
             ];
-            
+
             return response()->json($ret, 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 'exec' => false,

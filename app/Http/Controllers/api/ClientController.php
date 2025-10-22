@@ -415,6 +415,39 @@ class ClientController extends Controller
         }
         return null;
     }
+    /**
+     * Metodo para reativar um cliente que está na lixeira
+     */
+    public function reativar_client($cpf){
+        $client = Client::where('cpf', $cpf)
+            ->where('excluido', 's')
+            ->first();
+        if(!$client){
+            return response()->json([
+                'exec' => false,
+                'message' => 'Cliente não encontrado na lixeira',
+                'errors' => ['cpf' => ['Cliente com este CPF não foi encontrado na lixeira']],
+            ], 404);
+        }
+        $client->status = 'actived';
+        $client->ativo = 's';
+        $client->excluido = 'n';
+        $client->save();
+        //verifica se é um cliente alloyal
+        $is_alloyal = (new AlloyalController)->is_alloyal($cpf);
+        if($is_alloyal['exec']){
+            //retivar na alloyal table também
+            (new AlloyalController)->ativate([
+                'cpf'=>$cpf,
+                'name'=>$client->name,
+            ]);
+        }
+
+        return response()->json([
+            'exec' => true,
+            'message' => 'Cliente reativado com sucesso',
+        ], 200);
+    }
 
     /**
      * Criar um novo cliente (pré-cadastro) ou processar pontos (PUT)
@@ -458,6 +491,13 @@ class ClientController extends Controller
         // dd($request->all());
         //verifica se o CPF ja Existe
         $clientCheck = Client::where('cpf', $request->cpf)->first();
+        //verificar se está desativado é so ativar
+        if($clientCheck && $clientCheck->status == 'inactived'){
+           $response = $this->reativar_client($cpf);
+           if($response){
+               return $response;
+           }
+        }
         if($clientCheck){
             return response()->json([
                 'exec' => false,
@@ -924,13 +964,27 @@ class ClientController extends Controller
 
         // Mover para lixeira em vez de excluir permanentemente
         $client->update([
-            'deletado' => 's',
+            'ativo' => 'n',
+            'status' => 'inactived',
+            'excluido' => 's',
             'reg_deletado' => json_encode([
                 'usuario' => $user->id,
                 'nome' => $user->name,
                 'created_at' => now(),
             ])
         ]);
+
+        // Atualizar status na alloyal
+        $cpf = $client->cpf;
+        if(!$cpf){
+            return response()->json([
+                'exec' => false,
+                'message' => 'Erro de validação',
+                'errors' => ['cpf' => ['CPF inválido']],
+            ], 422);
+        }
+        $deleAlloyal = (new AlloyalController)->destroy($client->cpf);
+        // $this->sendCadastroToAlloyal($client->toArray());
 
         return response()->json([
             'exec' => true,
