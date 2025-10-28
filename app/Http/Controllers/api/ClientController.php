@@ -499,11 +499,12 @@ class ClientController extends Controller
            }
         }
         if($clientCheck){
-            return response()->json([
-                'exec' => false,
-                'message' => 'CPF já existe',
-                'errors'  => ['cpf' => ['CPF já existe']],
-            ], 422);
+            // return response()->json([
+            //     'exec' => false,
+            //     'message' => 'CPF já existe',
+            //     'errors'  => ['cpf' => ['CPF já existe']],
+            // ], 422);
+            return $this->processPointsOnly($request);
         }
         // Validação específica para pré-cadastro
         $validator = Validator::make($request->all(), [
