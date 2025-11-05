@@ -65,7 +65,7 @@ class SendRedemptionNotification implements ShouldQueue
             }
 
             // Buscar administradores e enviar notificação
-            $admins = User::where('permission_id','<=', 1)->get();
+            $admins = User::where('permission_id','<=', 2)->get();
             if ($admins->count() > 0) {
                 $adminEmailResult = $brevoService->sendAdminRedemptionNotification(
                     $this->user,
