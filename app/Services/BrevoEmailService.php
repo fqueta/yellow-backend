@@ -221,7 +221,7 @@ class BrevoEmailService
                             <li><strong>Pontos Utilizados:</strong> {$pointsUsed}</li>
                             <li><strong>CPF:</strong> {$user->cpf}</li>
                             <li><strong>ID do Resgate:</strong> #{$redemption->id}</li>
-                            <li><strong>Data:</strong> " . $redemption->created_at->format('d/m/Y') . "</li>
+                            <li><strong>Data:</strong> " . $redemption->created_at->setTimezone(config('app.timezone'))->format('d/m/Y') . "</li>
                         </ul>
                         " . (!empty($redemption->config) ? $this->formatRedemptionConfig($redemption->config, 'client') : "") . "
                     </div>
@@ -295,7 +295,7 @@ class BrevoEmailService
                         <li><strong>Pontos Utilizados:</strong> {$pointsUsed}</li>
                         <li><strong>ID do Resgate:</strong> #{$redemption->id}</li>
                         <li><strong>Status:</strong> {$redemption->status}</li>
-                        <li><strong>Data:</strong> " . $redemption->created_at->format('d/m/Y') . "</li>
+                        <li><strong>Data:</strong> " . $redemption->created_at->setTimezone(config('app.timezone'))->format('d/m/Y') . "</li>
                     </ul>
                     " . (!empty($redemption->config) ? $this->formatRedemptionConfig($redemption->config, 'admin') : "") . "
 

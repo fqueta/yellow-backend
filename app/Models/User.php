@@ -5,6 +5,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable
 {
@@ -46,32 +47,16 @@ class User extends Authenticatable
     ];
     public $incrementing = false;   // 👈 precisa porque o id não é int
     protected $keyType = 'string';  // 👈 precisa porque UUID é string
-    // RELACIONAMENTOS
-    public function permission()
+
+    /**
+     * Enviar notificação de redefinição de senha via canal Brevo.
+     * Usa a notificação customizada ResetPasswordNotification.
+     *
+     * @param string $token Token de redefinição enviado pelo broker
+     * @return void
+     */
+    public function sendPasswordResetNotification($token): void
     {
-        return $this->belongsTo(Permission::class);
+        $this->notify(new ResetPasswordNotification($token));
     }
-
-    public function menus()
-    {
-        return $this->belongsToMany(Menu::class, 'menu_permission', 'permission_id', 'menu_id');
-    }
-
-
-    // MÉTODO PARA RETORNAR MENUS FORMATADOS
-    // public function menusPermitidosFiltrados()
-    // {
-    //     return $this->menus()
-    //         ->with('submenus') // Caso queira carregar itens de menus
-    //         ->orderBy('title')
-    //         ->get()
-    //         ->map(function ($menu) {
-    //             return [
-    //                 'title' => $menu->title,
-    //                 'url'   => $menu->url,
-    //                 'icon'  => $menu->icon,
-    //                 'items' => $menu->items ? json_decode($menu->items, true) : null,
-    //             ];
-    //         });
-    // }
 }
