@@ -342,7 +342,7 @@ class RedeemController extends Controller
 
                 // Se o status for 'delivered', definir a data de entrega
                 if ($newStatus === 'delivered' && $oldStatus !== 'delivered') {
-                    $redemption->actual_delivery_date = now()->format('Y-m-d');
+                    $redemption->actual_delivery_date = now()->setTimezone(config('app.timezone'))->format('Y-m-d');
                 }
                 if($request->get('trackingCode')){
                     $redemption->config = $config;
