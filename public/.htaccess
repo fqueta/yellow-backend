@@ -33,11 +33,11 @@
     RewriteRule ^ index.php [L]
 
     # Permissões da API
-    <LimitExcept GET POST PUT DELETE OPTIONS>
+    <LimitExcept GET POST PUT DELETE PATCH OPTIONS>
         Deny from all
     </LimitExcept>
 
-    <Limit GET POST PUT DELETE OPTIONS>
+    <Limit GET POST PUT DELETE PATCH OPTIONS>
         Require all granted
     </Limit>
 </IfModule>

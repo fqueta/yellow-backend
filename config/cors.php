@@ -2,7 +2,7 @@
 
 return [
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     'allowed_origins' => [
         'https://api-clubeyellow.maisaqui.com.br',
         'https://clubeyellow.maisaqui.com.br',
