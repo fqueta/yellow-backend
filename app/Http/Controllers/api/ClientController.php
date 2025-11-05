@@ -77,7 +77,8 @@ class ClientController extends Controller
             $query->where(function($q) use ($request){
                 $q->where('email', 'like', '%' . trim($request->input('search')) . '%')
                 ->orWhere('cpf', 'like', '%' . trim($request->input('search')) . '%')
-                ->orWhere('cnpj', 'like', '%' . trim($request->input('search')) . '%');
+                ->orWhere('cnpj', 'like', '%' . trim($request->input('search')) . '%')
+                ->orWhere('name', 'like', '%' . trim($request->input('search')) . '%');
             });
         }
 
