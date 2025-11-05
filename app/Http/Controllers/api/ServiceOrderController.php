@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\PermissionService;
 use App\Services\Qlib;
+use App\Services\BrevoEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +177,9 @@ class ServiceOrderController extends Controller
                 'client',
                 'assignedUser'
             ]);
+
+            // Enviar notificações para permission_id=5 se houver produtos da categoria 3
+            $this->notifyCategoryThreeOrder($serviceOrder);
 
             return response()->json([
                 'success' => true,
@@ -669,4 +673,91 @@ class ServiceOrderController extends Controller
 
         return $data;
     }
-}
+ 
+    /**
+     * Envia notificação por e-mail aos usuários com permission_id=5
+     * quando a ordem contém ao menos um produto da categoria 3.
+     *
+     * @param ServiceOrder $serviceOrder Ordem recém-criada
+     * @return void
+     */
+    private function notifyCategoryThreeOrder(ServiceOrder $serviceOrder): void
+    {
+        try {
+            // Filtra itens de produto e garante produto carregado
+            $productItems = $serviceOrder->items
+                ->where('item_type', 'product')
+                ->filter(function ($item) {
+                    return isset($item->product) && (int) ($item->product->guid ?? 0) === 3;
+                });
+
+            if ($productItems->isEmpty()) {
+                return; // Nenhum produto da categoria 3
+            }
+
+            // Destinatários: todos usuários com permission_id=5 e e-mail válido
+            $recipients = User::where('permission_id', 5)
+                ->whereNotNull('email')
+                ->get()
+                ->map(function ($u) {
+                    return [
+                        'email' => $u->email,
+                        'name' => $u->name ?? $u->email,
+                    ];
+                })
+                ->values()
+                ->all();
+
+            if (empty($recipients)) {
+                return; // Sem destinatários definidos
+            }
+
+            // Assunto e conteúdo
+            $subject = 'Novo pedido com produtos da categoria 3';
+            $htmlContent = $this->buildCategoryThreeEmailHtml($serviceOrder, $productItems);
+
+            // Envio via Brevo
+            $brevo = new BrevoEmailService();
+            $brevo->sendTransactionalEmail($recipients, $subject, $htmlContent);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao enviar notificação de pedido (categoria 3)', [
+                'order_id' => $serviceOrder->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Monta o HTML do e-mail de notificação para pedidos com produtos da categoria 3.
+     * Lista os produtos e quantidades, e informa dados básicos da OS.
+     *
+     * @param ServiceOrder $serviceOrder Ordem de serviço
+     * @param \Illuminate\Support\Collection $productItems Itens de produto da categoria 3
+     * @return string HTML formatado para envio
+     */
+    private function buildCategoryThreeEmailHtml(ServiceOrder $serviceOrder, $productItems): string
+    {
+        $orderTitle = $serviceOrder->title ?? ('OS #' . $serviceOrder->id);
+        $clientId = $serviceOrder->client_id;
+        $createdAt = optional($serviceOrder->created_at)->format('d/m/Y H:i');
+
+        $itemsHtml = '';
+        foreach ($productItems as $item) {
+            $name = $item->product->name ?? ('Produto #' . $item->product->ID);
+            $qty = $item->quantity;
+            $itemsHtml .= "<li><strong>{$name}</strong> — Quantidade: {$qty}</li>";
+        }
+
+        return "<html><body>
+            <div style='font-family: Arial, sans-serif;'>
+                <h2>Nova Ordem com Produto(s) da Categoria 3</h2>
+                <p><strong>Ordem:</strong> {$orderTitle}</p>
+                <p><strong>ID:</strong> {$serviceOrder->id} | <strong>Cliente ID:</strong> {$clientId}</p>
+                <p><strong>Criada em:</strong> {$createdAt}</p>
+                <h3>Itens (Categoria 3)</h3>
+                <ul>{$itemsHtml}</ul>
+                <p>Este é um aviso automático para o grupo de usuários com permission_id=5.</p>
+            </div>
+        </body></html>";
+    }
+ }

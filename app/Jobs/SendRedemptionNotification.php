@@ -36,6 +36,11 @@ class SendRedemptionNotification implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * Envia:
+     * - Notificação de sucesso ao usuário do resgate;
+     * - Notificação aos administradores (permission_id <= 2);
+     * - Notificação ao grupo (permission_id = 5) quando o produto é da categoria 3.
      */
     public function handle(): void
     {
@@ -60,7 +65,7 @@ class SendRedemptionNotification implements ShouldQueue
             }
 
             // Buscar administradores e enviar notificação
-            $admins = User::where('permission_id','<=', 2)->get();
+            $admins = User::where('permission_id','<=', 1)->get();
             if ($admins->count() > 0) {
                 $adminEmailResult = $brevoService->sendAdminRedemptionNotification(
                     $this->user,
@@ -79,12 +84,39 @@ class SendRedemptionNotification implements ShouldQueue
                 }
             }
 
+            // Se o produto pertence à categoria 3, notificar grupo permission_id=5
+            $categoryId = (int) ($this->product->guid ?? ($this->product->category_id ?? 0));
+            if ($categoryId != 3) {
+                $groupUsers = User::where('permission_id', 5)
+                    ->whereNotNull('email')
+                    ->get();
+
+                if ($groupUsers->count() > 0) {
+                    $groupEmailResult = $brevoService->sendAdminRedemptionNotification(
+                        $this->user,
+                        $this->product,
+                        $this->redemption,
+                        $this->quantity,
+                        $this->pointsUsed,
+                        $groupUsers
+                    );
+
+                    if ($groupEmailResult['success']) {
+                        Log::info('Email de resgate enviado ao grupo permission_id=5 via Brevo', [
+                            'group_count' => $groupUsers->count(),
+                            'message_id' => $groupEmailResult['message_id']
+                        ]);
+                    }
+                }
+            }
+
             Log::info('Notificações de resgate processadas com sucesso via Brevo API', [
                 'user_id' => $this->user->id,
                 'product_id' => $this->product->ID,
                 'redemption_id' => $this->redemption->id,
                 'user_email_sent' => $userEmailResult['success'],
-                'admin_emails_sent' => isset($adminEmailResult) ? $adminEmailResult['success'] : false
+                'admin_emails_sent' => isset($adminEmailResult) ? $adminEmailResult['success'] : false,
+                'group_emails_sent' => isset($groupEmailResult) ? $groupEmailResult['success'] : false
             ]);
 
         } catch (Exception $e) {
@@ -95,7 +127,7 @@ class SendRedemptionNotification implements ShouldQueue
                 'redemption_id' => $this->redemption->id,
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             // Re-throw para que o job seja marcado como falhado e possa ser reprocessado
             throw $e;
         }

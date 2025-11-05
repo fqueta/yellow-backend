@@ -247,6 +247,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('point-store/redemptions/{id}', [RedeemController::class, 'show'])->name('point-store.redemptions.show');
         Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
         Route::patch('admin/redemptions/{id}/status', [RedeemController::class, 'updateStatus'])->name('admin.redemptions.update-status');
+        Route::patch('admin/redemptions/{id}/refund', [RedeemController::class, 'refund'])->name('admin.redemptions.refund');
 
         // Rotas para services
         Route::apiResource('services', ServiceController::class,['parameters' => [

@@ -391,7 +391,7 @@ class BrevoEmailService
                 $html = "<div {$containerStyle}>";
                 $html .= "<h4> Instruções importantes:</h4>";
                 $html .= "<ul style='margin: 5px 0; padding-left: 20px;'>";
-                $html .= "<li>✔️ O PIX será processado em até 10 dias úteis</li>";
+                $html .= "<li>✔️ O PIX será processado em até 20 dias úteis</li>";
                 $html .= "<li>✔️ Verifique se a chave PIX está correta</li>";
                 $html .= "<li>✔️ Não é possível alterar os dados após confirmação</li>";
                 $html .= "</ul>";

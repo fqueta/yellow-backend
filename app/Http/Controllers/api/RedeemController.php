@@ -5,6 +5,12 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Models\Redemption;
 use App\Models\RedemptionStatusHistory;
+use App\Models\Point;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\AdminRedemptionRefundNotification;
+use App\Notifications\UserRedemptionRefundNotification;
 use App\Services\PermissionService;
 use App\Services\Qlib;
 use App\Jobs\SendRedemptionStatusUpdateNotification;
@@ -423,6 +429,147 @@ class RedeemController extends Controller
             return 'medium';
         } else {
             return 'low';
+        }
+    }
+    /**
+     * Extorno de resgate: credita pontos e notifica admin e cliente
+     * POST /admin/redemptions/{id}/refund
+     */
+    public function refund(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Acesso negado'], 403);
+            }
+
+            // Verificar permissão de edição
+            if (!$this->permissionService->isHasPermission('edit')) {
+                return response()->json(['error' => 'Acesso negado'], 403);
+            }
+
+            // Validar dados de entrada
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                'reason' => 'nullable|string|max:500',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            $id = Qlib::redeem_id($id);
+            // dd($id);
+
+            // Buscar o resgate com relacionamentos
+            $redemption = Redemption::with(['product', 'user'])
+                ->where('id', $id)
+                ->where('excluido', 'n')
+                ->where('deletado', 'n')
+                ->first();
+
+            if (!$redemption) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resgate não encontrado'
+                ], 404);
+            }
+
+            // Se já estiver cancelado, não repetir extorno
+            if ($redemption->status === 'cancelled') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resgate já está cancelado'
+                ], 422);
+            }
+
+            $reason = $request->input('reason');
+            $pointsToCredit = (int) $redemption->points_used;
+            $oldStatus = $redemption->status;
+            $newStatus = 'cancelled';
+            // dd($redemption);
+            DB::transaction(function () use ($redemption, $user, $pointsToCredit, $reason, $oldStatus, $newStatus) {
+                // Lançar crédito de pontos no extrato
+                $d_estorno = [
+                    'client_id' => $redemption->user_id,
+                    'valor' => $pointsToCredit,
+                    'tipo' => 'credito',
+                    'origem' => 'refund',
+                    'pedido_id' => $redemption->id,
+                    'description' => 'Extorno do resgate #' . Qlib::redeem_id($redemption->id),
+                    'data_expiracao' => now()->addYear(),
+                    'usuario_id' => $user->id,
+                    'autor' => 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                    'data' => now()->format('Y-m-d'),
+                ];
+                // dd($d_estorno);
+                Point::create($d_estorno);
+
+                // Registrar histórico de status
+                RedemptionStatusHistory::createHistory(
+                    $redemption->id,
+                    $oldStatus,
+                    $newStatus,
+                    $reason ? ('Extorno: ' . $reason) : 'Extorno realizado',
+                    'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
+                    $user->name
+                );
+
+                // Atualizar o status e notas administrativas
+                $redemption->status = $newStatus;
+                $adminNote = "Resgate extornado e cancelado por {$user->name} em " . now()->format('d/m/Y H:i:s');
+                if ($reason) {
+                    $adminNote .= "\nMotivo: {$reason}";
+                }
+                if ($redemption->admin_notes) {
+                    $redemption->admin_notes .= "\n" . $adminNote;
+                } else {
+                    $redemption->admin_notes = $adminNote;
+                }
+                $redemption->updated_at = now();
+                $redemption->save();
+            });
+
+            // Notificar cliente sobre o extorno e cancelamento
+            if ($redemption->user && $redemption->user->email) {
+                $redemption->user->notify(new UserRedemptionRefundNotification($redemption, $pointsToCredit, $reason, $user));
+            }
+
+            // Notificar administradores sobre o extorno
+            $admins = User::whereIn('permission_id', [1,2])
+                ->whereNotNull('email')
+                ->get();
+            if ($admins->count() > 0) {
+                Notification::send($admins, new AdminRedemptionRefundNotification($redemption, $pointsToCredit, $reason, $user));
+            }
+
+            // Enviar notificação de atualização de status através da fila (mantém padrão existente)
+            SendRedemptionStatusUpdateNotification::dispatch(
+                $redemption,
+                $oldStatus,
+                $newStatus,
+                $user
+            );
+
+            // Preparar resposta com dados atualizados
+            $redemption->load(['product', 'user']);
+            $mappedData = $this->mapRedemptionData($redemption);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Extorno realizado: pontos creditados e notificações enviadas',
+                'data' => $mappedData
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao realizar extorno: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

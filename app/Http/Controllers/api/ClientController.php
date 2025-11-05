@@ -72,6 +72,14 @@ class ClientController extends Controller
         if ($request->filled('cnpj')) {
             $query->where('cnpj', 'like', '%' . $request->input('cnpj') . '%');
         }
+        //incluir o parametro search para buscar por email, cpf ou cnpj remova qualquer espaço antes ou depois
+        if($request->filled('search')){
+            $query->where(function($q) use ($request){
+                $q->where('email', 'like', '%' . trim($request->input('search')) . '%')
+                ->orWhere('cpf', 'like', '%' . trim($request->input('search')) . '%')
+                ->orWhere('cnpj', 'like', '%' . trim($request->input('search')) . '%');
+            });
+        }
 
         if ($request->filled('propertys')) {
             $propertys = $request->input('propertys');
@@ -87,12 +95,6 @@ class ClientController extends Controller
         }
 
         $clients = $query->paginate($perPage);
-        // Exibir o SQL da query antes da paginação
-        // dd([
-        //     'sql' => $query->toSql(),
-        //     'bindings' => $query->getBindings(),
-        //     'full_sql' => vsprintf(str_replace('?', '\'%s\'', $query->toSql()), $query->getBindings())
-        // ]);
         // Converter config para array em cada cliente
         try {
             $clients->getCollection()->transform(function ($client) {
@@ -118,6 +120,7 @@ class ClientController extends Controller
             Log::error('Error in ClientController transform: ' . $e->getMessage());
             throw $e;
         }
+        // dd($clients);
         if($request->segment(4) == 'registred'){
             $ret = $clients->getCollection()->map(function ($client) {
                 return $this->map_client($client);
@@ -276,14 +279,17 @@ class ClientController extends Controller
         return $validated;
     }
     /**
-     * Processar apenas pontos (método PUT) usar para ativar o cliente inavido
+     * Processar apenas pontos (método PUT) para ativar cliente inativo.
+     * Aceita valores positivos (crédito) e negativos (débito).
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     private function processPointsOnly(Request $request)
     {
-        // Validar apenas os campos necessários para pontos
+        // Validar apenas os campos necessários para pontos pode aceitar numero negativos tambem
         $validator = Validator::make($request->all(), [
             'cpf' => 'required|string|max:20',
-            'points' => 'required|numeric|min:0',
+            'points' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -353,6 +359,24 @@ class ClientController extends Controller
                 // $link_active_cad = Qlib::qoption('link_active_cad');
                 // $link_active_cad = str_replace('{cpf}', $client->cpf, $link_active_cad);
                 // $ret['link_active_cad'] = $link_active_cad;
+                $ret['cpf'] = $client->cpf;
+            }
+        } elseif ($pontos < 0) {
+            // Registrar débito de pontos (valores negativos)
+            $pc = new PointController();
+            $data = [
+                'valor' => $pontos,
+                'tipo' => 'debito',
+                'client_id' => $client->id,
+            ];
+
+            $savePoints = $pc->createOrUpdate($data);
+            $identificador = uniqid();
+
+            $ret['identificador'] = Qlib::update_usermeta($client->id,'id_points',$identificador);
+            $ret['points'] = $savePoints;
+
+            if($savePoints){
                 $ret['cpf'] = $client->cpf;
             }
         }
