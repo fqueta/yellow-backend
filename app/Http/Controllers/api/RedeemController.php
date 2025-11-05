@@ -498,7 +498,7 @@ class RedeemController extends Controller
                     'tipo' => 'credito',
                     'origem' => 'refund',
                     'pedido_id' => $redemption->id,
-                    'description' => 'Extorno do resgate #' . Qlib::redeem_id($redemption->id),
+                    'description' => 'Estorno do resgate #' . Qlib::redeem_id($redemption->id),
                     'data_expiracao' => now()->addYear(),
                     'usuario_id' => $user->id,
                     'autor' => 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
@@ -514,14 +514,14 @@ class RedeemController extends Controller
                     $redemption->id,
                     $oldStatus,
                     $newStatus,
-                    $reason ? ('Extorno: ' . $reason) : 'Extorno realizado',
+                    $reason ? ('Estorno: ' . $reason) : 'Estorno realizado',
                     'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
                     $user->name
                 );
 
                 // Atualizar o status e notas administrativas
                 $redemption->status = $newStatus;
-                $adminNote = "Resgate extornado e cancelado por {$user->name} em " . now()->format('d/m/Y H:i:s');
+                $adminNote = "Resgate estornado e cancelado por {$user->name} em " . now()->setTimezone(config('app.timezone'))->format('d/m/Y H:i:s');
                 if ($reason) {
                     $adminNote .= "\nMotivo: {$reason}";
                 }
