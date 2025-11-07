@@ -157,3 +157,10 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Print-only fix: hide dev overlay Notifications (F8) to avoid blank page */
+@media print {
+  [aria-label="Notifications (F8)"] {
+    display: none !important;
+  }
+}
