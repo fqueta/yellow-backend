@@ -26,13 +26,13 @@ class DashboardController extends Controller
 
         $user = $request->user();
         $partnerPermissionId = Qlib::qoption('permission_partner_id') ?? 5;
-        $authorId = ($user && (int)($user->permission_id) >= (int)$partnerPermissionId) ? (int)$user->id : null;
+        $authorId = ($user && (int)($user->permission_id) >= (int)$partnerPermissionId) ? $user->id : null;
 
         $recentActivities = $this->getRecentClientActivities($authorId);
         $registrationData = $this->getClientRegistrationData($authorId);
         $pendingPreRegistrations = $this->getPendingPreRegistrations($authorId);
         $totals = $this->getDashboardTotals($authorId);
-
+        // dd($pendingPreRegistrations);
         return response()->json([
             'success' => true,
             'data' => [
@@ -80,13 +80,14 @@ class DashboardController extends Controller
         if ($authorId) {
             $query->where('autor', $authorId);
         }
-
+        // dd($query->toSql());
+        // dd($query->get());
         return $query->limit(10)->get()->map(function ($client) {
             return [
                 'id' => $client->id,
                 'name' => $client->name,
                 'email' => $client->email,
-                'created_at' => $client->created_at->format('d/m/Y H:i'),
+                'date' => $client->created_at->format('d/m/Y H:i'),
             ];
         })->toArray();
     }
