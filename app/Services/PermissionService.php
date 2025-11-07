@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Menu;
 use App\Models\MenuPermission;
 use App\Models\User;
+use Illuminate\Http\Request; // Added for request handling
+use Illuminate\Http\JsonResponse; // Added for typed responses
 
 class PermissionService
 {
@@ -33,6 +35,7 @@ class PermissionService
             return false;
         }
     }
+
     /**
      * metodo para loca
      */
@@ -47,19 +50,94 @@ class PermissionService
         }
         // return Menu::where('url',$url)->first()->id;
     }
+
     /**
      * Metodo para veriricar se o usuario tem permissão para executar ao acessar esse recurso atraves de ''
      * @params string 'view | create | edit | delete'
      */
+    /**
+     * Verifica permissão e também valida status ativo; revoga token se inativo.
+     * Checks permission and also enforces active status; revoke token if inactive.
+     *
+     * Regras:
+     * - Primeiro valida se o usuário está ativo via enforceActiveUserOrRevokeToken.
+     * - Se inativo/sem usuário, o token é revogado e retorna false.
+     * - Se ativo, verifica permissão de acordo com $permissao.
+     *
+     * @param string $permissao 'view | create | edit | delete'
+     * @return bool true quando permitido e usuário ativo; false caso contrário
+     */
     public function isHasPermission($permissao=''){
-        $user = request()->user();
-        $routeName = request()->route()->getName();
-        if ($this->can($user, $routeName, $permissao)) {
-            return true;
-        }else{
+        // Enforce active user first; if inactive/unauthenticated, revoke token and deny.
+        $revocationResponse = $this->enforceActiveUserOrRevokeToken(request());
+        if ($revocationResponse !== null) {
             return false;
         }
+
+        $user = request()->user();
+        $routeName = request()->route()->getName();
+        // dd($this->can($user, $routeName, $permissao));
+        return $this->can($user, $routeName, $permissao);
     }
+
+    /**
+     * Validate and enforce active user status; revoke token if inactive.
+     * Valida se o usuário está com status "actived"; revoga o token se inativo.
+     *
+     * Regras:
+     * - Considera status válidos: "actived", "active" ou "ativo".
+     * - Se não estiver ativo, o token de acesso atual é revogado (deletado).
+     * - Retorna uma resposta JSON com erro quando revogado; retorna null se ativo.
+     *
+     * Exemplo de uso em controlador:
+     *   if ($resp = app(PermissionService::class)->enforceActiveUserOrRevokeToken($request)) {
+     *       return $resp; // 403 e token revogado
+     *   }
+     *
+     * @param Request $request Requisição atual com usuário autenticado (Sanctum)
+     * @return JsonResponse|null Resposta de erro se inativo; null quando ok
+     */
+    public function enforceActiveUserOrRevokeToken(Request $request): ?JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Acesso negado'
+            ], 401);
+        }
+
+        $status = isset($user->status) ? strtolower((string) $user->status) : null;
+        $isActive = in_array($status, ['actived', 'inactived', 'pre_registred'], true);
+        $inativar = false;
+        //Verifica se o status é válido e igual a 'actived'
+        if($status!='actived'){
+            $inativar = true;
+        }
+        if($status=='pre_registred' || $isActive != true){
+            $inativar = true;
+        }
+        if ($inativar) {
+            // Revoga o token de acesso atual do usuário (Sanctum)
+            $currentToken = method_exists($user, 'currentAccessToken') ? $user->currentAccessToken() : null;
+            if ($currentToken) {
+                $currentToken->delete();
+            } else {
+                // Fallback: remove todos os tokens caso o atual não seja identificável
+                if (method_exists($user, 'tokens')) {
+                    $user->tokens()->delete();
+                }
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuário inativo. Token revogado.'
+            ], 403);
+        }
+
+        return null;
+    }
+
     private function get_url_by_route($name=''){
         $url = '';
         if($name=='api.dashboard'){

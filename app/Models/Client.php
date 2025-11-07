@@ -120,16 +120,21 @@ class Client extends User
 
     /**
      * Buscar atividades recentes de clientes
-     * @param int $days
-     * @param int $limit
+     * @param int $days Período em dias (inclui hoje)
+     * @param int $limit Limite de registros retornados
+     * @param int|null $authorId Filtra por autor (user id) quando informado
      * @return array
      */
-    public static function getRecentActivities($days = 30, $limit = 20)
+    public static function getRecentActivities($days = 30, $limit = 20, $authorId = null)
     {
         // Subtrai (days - 1) para incluir o dia de hoje no período
         $activities = static::select('id', 'name', 'email', 'status', 'created_at', 'updated_at')
             ->where('created_at', '>=', now()->subDays($days - 1)->startOfDay())
             ->where('excluido', 'n')
+            // aplica filtro por autor quando fornecido
+            ->when($authorId, function ($q) use ($authorId) {
+                $q->where('autor', $authorId);
+            })
             ->orderBy('created_at', 'desc')
             ->limit($limit)
             ->get()
@@ -151,10 +156,11 @@ class Client extends User
 
     /**
      * Buscar dados de registro por período
-     * @param int $days
+     * @param int $days Período em dias (inclui hoje)
+     * @param int|null $authorId Filtra por autor (user id) quando informado
      * @return array
      */
-    public static function getRegistrationDataByPeriod($days = 14)
+    public static function getRegistrationDataByPeriod($days = 14, $authorId = null)
     {
         // Subtrai (days - 1) para incluir o dia de hoje no período
         $startDate = now()->subDays($days - 1);
@@ -163,14 +169,24 @@ class Client extends User
         for ($i = 0; $i < $days; $i++) {
             $date = $startDate->copy()->addDays($i);
             $dateStr = $date->format('Y-m-d');
-            // dump($dateStr);
 
             $data[] = [
-                // 'date' => $date->format('d/m'),
                 'date' => $dateStr,
-                'actived' => static::whereDate('created_at', $dateStr)->where('status', 'actived')->where('excluido', 'n')->count(),
-                'inactived' =>  static::whereDate('created_at', $dateStr)->where('status', 'inactived')->where('excluido', 'n')->count(), // Sempre 0 já que não temos coluna status
-                'pre_registred' => static::whereDate('created_at', $dateStr)->where('status', 'pre_registred')->where('excluido', 'n')->count(),
+                'actived' => static::whereDate('created_at', $dateStr)
+                    ->where('status', 'actived')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
+                'inactived' => static::whereDate('created_at', $dateStr)
+                    ->where('status', 'inactived')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
+                'pre_registred' => static::whereDate('created_at', $dateStr)
+                    ->where('status', 'pre_registred')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
             ];
         }
 
@@ -179,15 +195,25 @@ class Client extends User
 
     /**
      * Buscar totais do dashboard com variação percentual
+     * @param int|null $authorId Filtra por autor (user id) quando informado
      * @return array
      */
-    public static function getDashboardTotals()
+    public static function getDashboardTotals($authorId = null)
     {
         // Período atual (últimos 30 dias incluindo hoje)
         $currentPeriod = [
-            'actived' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())->where('status', 'actived')->where('excluido', 'n')->count(),
-            'inactived' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())->where('status', 'inactived')->where('excluido', 'n')->count(),
-            'pre_registred' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())->where('status', 'pre_registred')->where('excluido', 'n')->count(),
+            'actived' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())
+                ->where('status', 'actived')->where('excluido', 'n')
+                ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                ->count(),
+            'inactived' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())
+                ->where('status', 'inactived')->where('excluido', 'n')
+                ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                ->count(),
+            'pre_registred' => static::where('created_at', '>=', now()->subDays(29)->startOfDay())
+                ->where('status', 'pre_registred')->where('excluido', 'n')
+                ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                ->count(),
         ];
 
         // Período anterior (30 dias anteriores ao período atual)
@@ -195,15 +221,21 @@ class Client extends User
             'actived' => static::whereBetween('created_at', [
                 now()->subDays(59)->startOfDay(),
                 now()->subDays(30)->endOfDay()
-            ])->where('status', 'actived')->where('excluido', 'n')->count(),
+            ])->where('status', 'actived')->where('excluido', 'n')
+            ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+            ->count(),
             'inactived' => static::whereBetween('created_at', [
                 now()->subDays(59)->startOfDay(),
                 now()->subDays(30)->endOfDay()
-            ])->where('status', 'inactived')->where('excluido', 'n')->count(),
+            ])->where('status', 'inactived')->where('excluido', 'n')
+            ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+            ->count(),
             'pre_registred' => static::whereBetween('created_at', [
                 now()->subDays(59)->startOfDay(),
                 now()->subDays(30)->endOfDay()
-            ])->where('status', 'pre_registred')->where('excluido', 'n')->count(),
+            ])->where('status', 'pre_registred')->where('excluido', 'n')
+            ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+            ->count(),
         ];
 
         // Calcular variação percentual

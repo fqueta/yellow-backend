@@ -4,121 +4,110 @@ namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Services\PermissionService;
+use App\Models\User;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    protected PermissionService $permissionService;
-    public $routeName;
-    public $sec;
-    public $cliente_permission_id;
-    public function __construct()
-    {
-        $this->cliente_permission_id = Qlib::qoption('cliente_permission_id')??6;
-        $this->routeName = request()->route()->getName();
-        $this->permissionService = new PermissionService();
-        $this->sec = request()->segment(3);
-    }
     /**
-     * Retorna dados do dashboard incluindo atividades recentes,
-     * dados de cadastros dos últimos 14 dias e pré-cadastros pendentes
+     * Exibir dados do dashboard
+     * - Quando `permission_id >= 5` (parceiro), filtra por `autor = user_id`.
+     * - Administradores (permission_id < 5) veem dados sem filtro de autor.
      */
     public function index(Request $request)
     {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
-        if (!$this->permissionService->isHasPermission('view')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
-        try {
-            // Buscar atividades recentes de clientes (últimos 30 dias)
-            $recentClientActivities = $this->getRecentClientActivities();
-
-            // Buscar dados de cadastros dos últimos 14 dias
-            $clientRegistrationData = $this->getClientRegistrationData();
-
-            // Buscar pré-cadastros pendentes
-            $pendingPreRegistrations = $this->getPendingPreRegistrations();
-
-            // Buscar totais para cards do dashboard
-            $totals = $this->getDashboardTotals();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'recentClientActivities' => $recentClientActivities,
-                    'clientRegistrationData' => $clientRegistrationData,
-                    'pendingPreRegistrations' => $pendingPreRegistrations,
-                    'totals' => $totals
-                ]
-            ]);
-        } catch (\Exception $e) {
+        if (!$this->isHasPermission('view', $request)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao buscar dados do dashboard',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => __('Você não tem permissão para visualizar este conteúdo!')
+            ], 403);
         }
+
+        $user = $request->user();
+        $partnerPermissionId = Qlib::qoption('permission_partner_id') ?? 5;
+        $authorId = ($user && (int)($user->permission_id) >= (int)$partnerPermissionId) ? (int)$user->id : null;
+
+        $recentActivities = $this->getRecentClientActivities($authorId);
+        $registrationData = $this->getClientRegistrationData($authorId);
+        $pendingPreRegistrations = $this->getPendingPreRegistrations($authorId);
+        $totals = $this->getDashboardTotals($authorId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'recent_activities' => $recentActivities,
+                'registration_data' => $registrationData,
+                'pending_pre_registrations' => $pendingPreRegistrations,
+                'totals' => $totals,
+            ],
+        ]);
     }
 
     /**
-     * Busca atividades recentes de clientes (últimos 30 dias)
+     * Atividades recentes dos clientes
+     * @param int|null $authorId Filtra por autor quando informado
+     * @return array
      */
-    private function getRecentClientActivities()
+    private function getRecentClientActivities(?int $authorId = null): array
     {
-        // O método Client::getRecentActivities já retorna um array formatado
-        return Client::getRecentActivities(20);
+        // No código original, o método do model recebe dias como primeiro parâmetro.
+        return Client::getRecentActivities(20, 20, $authorId);
     }
 
     /**
-     * Busca dados de cadastros dos últimos 14 dias agrupados por data
+     * Dados de cadastro por período (últimos 14 dias)
+     * @param int|null $authorId Filtra por autor quando informado
+     * @return array
      */
-    private function getClientRegistrationData()
+    private function getClientRegistrationData(?int $authorId = null): array
     {
-        // Usar método do modelo Client
-        return Client::getRegistrationDataByPeriod(14);
+        return Client::getRegistrationDataByPeriod(14, $authorId);
     }
 
     /**
-     * Busca pré-cadastros pendentes
+     * Pré-cadastros pendentes
+     * @param int|null $authorId Filtra por autor quando informado
+     * @return array
      */
-    private function getPendingPreRegistrations()
+    private function getPendingPreRegistrations(?int $authorId = null): array
     {
-        $pending = Client::select('id', 'name', 'email', 'created_at')
+        $query = Client::select('id', 'name', 'email', 'created_at')
             ->where('status', 'pre_registred')
             ->where('excluido', 'n')
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->orderBy('created_at', 'desc');
 
-        return $pending->map(function ($client) {
+        if ($authorId) {
+            $query->where('autor', $authorId);
+        }
+
+        return $query->limit(10)->get()->map(function ($client) {
             return [
                 'id' => $client->id,
                 'name' => $client->name,
                 'email' => $client->email,
-                'phone' => '(XX) XXXXX-XXXX', // Campo não existe na tabela, usar valor padrão
-                'date' => $client->created_at->format('Y-m-d'),
-                'type' => 'Pessoa Física', // Padrão já que não temos coluna tipo_pessoa
-                'cpf' => '000.000.000-00', // Padrão já que não temos coluna cpf
-                'cnpj' => '' // Padrão já que não temos coluna cnpj
+                'created_at' => $client->created_at->format('d/m/Y H:i'),
             ];
         })->toArray();
     }
 
     /**
-     * Busca totais para cards do dashboard
+     * Totais dos cards do dashboard
+     * @param int|null $authorId Filtra por autor quando informado
+     * @return array
      */
-    private function getDashboardTotals()
+    private function getDashboardTotals(?int $authorId = null): array
     {
-        // Usar método estático do modelo Client
-        return Client::getDashboardTotals();
+        return Client::getDashboardTotals($authorId);
     }
 
-
+    /**
+     * Verifica se usuário tem permissão para determinada ação.
+     * Caso o usuário esteja inativo, o token é revogado no PermissionService.
+     */
+    private function isHasPermission(string $acao = 'view', Request $request): bool
+    {
+        $PermissionService = new \App\Services\PermissionService();
+        return $PermissionService->isHasPermission($acao, $request);
+    }
 }

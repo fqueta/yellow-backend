@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use function PHPUnit\Framework\isArray;
 use App\Http\Controllers\api\PointController;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
 class ClientController extends Controller
@@ -36,6 +37,7 @@ class ClientController extends Controller
 
     /**
      * Listar todos os clientes
+     * Regra: usuários com `permission_id >= 3` só veem clientes de sua autoria.
      */
     public function index(Request $request)
     {
@@ -51,14 +53,22 @@ class ClientController extends Controller
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
         $query = Client::query()->where('permission_id','=', $this->permission_id)->orderBy($order_by, $order);
-
-        // Não exibir registros marcados como deletados ou excluídos
-        $query->where(function($q) {
-            $q->whereNull('deletado')->orWhere('deletado', '!=', 's');
-        });
-        $query->where(function($q) {
-            $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
-        });
+        // Regra: usuários com permission_id >= 3 veem apenas clientes de sua autoria
+        if ($user && (int)$user->permission_id >= 3) {
+            $query->where('autor', $user->id);
+        }
+        //se o imput excluido estiver com valor s, então exibir registros marcados como excluídos
+        if($request->filled('excluido') && $request->input('excluido') == 's'){
+            $query->where('excluido', 's');
+        }else{
+            // Não exibir registros marcados como deletados ou excluídos
+            $query->where(function($q) {
+                $q->whereNull('deletado')->orWhere('deletado', '!=', 's');
+            });
+            $query->where(function($q) {
+                $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
+            });
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -115,6 +125,8 @@ class ClientController extends Controller
                     $client->config = is_array($client->config) ? $client->config : [];
                 }
                 $client->is_alloyal = Qlib::get_usermeta($client->id,'is_alloyal');
+                //Exibir o nome do parceiro no lugar do autor
+                $client->autor_name = $client->autor ? User::find($client->autor)->name : '';
                 return $client;
             });
         } catch (\Exception $e) {
@@ -925,7 +937,8 @@ class ClientController extends Controller
 
         // Sanitização dos dados
         $validated = $this->sanitizeInput($validated);
-        $clientData = $this->prepareClientData($validated, 'actived');
+        $status = $validated['status'] ?? 'actived';
+        $clientData = $this->prepareClientData($validated, $status);
         // Tratar senha se fornecida
         // if (isset($clientData['password']) && !empty($clientData['password'])) {
         //     $clientData['password'] = Hash::make($clientData['password']);

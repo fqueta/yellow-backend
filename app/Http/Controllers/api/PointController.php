@@ -535,73 +535,76 @@ class PointController extends Controller
      * Obter extrato de pontos de um usuário específico
      * GET /admin/users/{userId}/points-balance
      */
-    public function getUserPointsBalance(Request $request, string $userId)
+    public function getAuthenticatedUserBalance(\Illuminate\Http\Request $request)
     {
-        $user = request()->user();
+        $user = $request->user();
         if (!$user) {
-            return response()->json(['error' => 'Acesso negado'], 403);
+            return response()->json(['success' => false, 'message' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('view')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
-
-        // Buscar o usuário
-        $targetUser = User::find($userId);
-        if (!$targetUser) {
-            return response()->json(['error' => 'Usuário não encontrado'], 404);
-        }
-
-        // Buscar todas as transações de pontos do usuário
-        $query = Point::where('client_id', $userId)
-                     ->orderBy('created_at', 'desc');
-
-        // Aplicar filtros se fornecidos
-        if ($request->has('start_date')) {
-            $query->where('data', '>=', $request->start_date);
-        }
-        if ($request->has('end_date')) {
-            $query->where('data', '<=', $request->end_date);
-        }
-        if ($request->has('type')) {
-            $query->where('tipo', $request->type);
-        }
-
-        $transactions = $query->get();
-        // Calcular saldo atual
-        $currentBalance = Point::saldoCliente($userId);
-
-        // Mapear transações para o formato solicitado
-        $data = $transactions->map(function ($transaction) use ($targetUser) {
-            return [
-                'id' => $transaction->id,
-                'userId' => $transaction->client_id,
-                'userName' => $targetUser->name,
-                'userEmail' => $targetUser->email,
-                'type' => $transaction->tipo, // 'credito' ou 'debito'
-                'points' => $transaction->tipo === 'debito' ? -abs($transaction->valor) : abs($transaction->valor),
-                'description' => $transaction->description,
-                'reference' => $transaction->pedido_id,
-                'balanceBefore' => $this->calculateBalanceBefore($transaction),
-                'balanceAfter' => $this->calculateBalanceAfter($transaction),
-                'expirationDate' => $transaction->data_expiracao ? $transaction->data_expiracao->toISOString() : null,
-                'createdAt' => $transaction->created_at->toISOString(),
-                'createdBy' => $transaction->autor,
-            ];
-        });
-
+    
+        $userId = $user->id;
+    
+        // Total de pontos ganhos (créditos)
+        $totalEarned = (float) \App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'credito')
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->sum('valor');
+    
+        // Total de pontos gastos (débitos)
+        $totalSpent = (float) \App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'debito')
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->sum('valor');
+    
+        // Total de transações
+        $totalTransactions = (int) \App\Models\Point::where('client_id', $userId)
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->count();
+    
+        // Pontos ativos (créditos não expirados - débitos)
+        $activeBalance = (float) (\App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'credito')
+            ->where(function ($q) {
+                $q->whereNull('data_expiracao')
+                  ->orWhere('data_expiracao', '>', now());
+            })
+            ->sum('valor')
+        ) - (float) (\App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'debito')
+            ->sum('valor'));
+    
+        // Pontos expirados (créditos marcados como expirados)
+        $expiredPoints = (float) \App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'credito')
+            ->where('status', 'expirado')
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->sum('valor');
+    
+        // Total de pontos (saldo disponível); igualamos ao activeBalance
+        $totalPoints = $activeBalance;
+    
+        $data = [
+            'total_points' => (string) (int) $totalPoints,
+            'total_earned' => (string) (int) $totalEarned,
+            'total_spent' => (string) (int) $totalSpent,
+            'total_transactions' => $totalTransactions,
+            'active_points' => (string) (int) $activeBalance,
+            'expired_points' => (int) $expiredPoints,
+        ];
+    
         return response()->json([
             'success' => true,
+            'message' => 'OK',
             'data' => $data,
-            'meta' => [
-                'currentBalance' => $currentBalance,
-                'totalTransactions' => $transactions->count(),
-                'user' => [
-                    'id' => $targetUser->id,
-                    'name' => $targetUser->name,
-                    'email' => $targetUser->email,
-                ]
-            ]
-        ]);
+        ], 200);
     }
 
     /**
