@@ -179,7 +179,16 @@ class PointController extends Controller
     }
 
     /**
-     * Listar todos os pontos
+     * Listar todos os pontos com filtros, ordenação e paginação.
+     *
+     * Parâmetros aceitos:
+     * - client_id, tipo (credito|debito), status, origem, search
+     * - dateFrom/dateTo ou data_inicio/data_fim ou date_from/date_to
+     * - sort (ex.: createdAt, points, type, status, origin, data)
+     * - order (asc|desc), per_page, page
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
@@ -233,14 +242,56 @@ class PointController extends Controller
             });
         }
 
-        // Ordenação
-        $orderBy = $request->get('order_by', 'data');
-        $orderDirection = $request->get('order_direction', 'desc');
+        // Período: suporta camelCase e snake_case
+        $dateFrom = $request->get('dateFrom') ?? $request->get('date_from') ?? $request->get('data_inicio');
+        $dateTo   = $request->get('dateTo')   ?? $request->get('date_to')   ?? $request->get('data_fim');
+        if ($dateFrom && $dateTo) {
+            $query->porPeriodo($dateFrom, $dateTo);
+        }
+
+        if ($request->has('expirando') && $request->expirando == 'true') {
+            $dias = $request->get('dias_expiracao', 30);
+            $query->vencendoEm($dias);
+        }
+
+        if ($request->has('expirados') && $request->expirados == 'true') {
+            $query->expirados();
+        }
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
+                  ->orWhere('pedido_id', 'like', "%{$search}%")
+                  ->orWhereHas('cliente', function($clienteQuery) use ($search) {
+                      $clienteQuery->where('name', 'like', "%{$search}%")
+                                  ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Ordenação: aceita sort/order e mapeia campos conhecidos
+        $sortParam = $request->get('sort', $request->get('order_by', 'created_at'));
+        $sortMap = [
+            'createdAt' => 'created_at',
+            'expirationDate' => 'data_expiracao',
+            'points' => 'valor',
+            'type' => 'tipo',
+            'status' => 'status',
+            'origin' => 'origem',
+            'data' => 'data',
+            'created_at' => 'created_at',
+        ];
+        $orderBy = $sortMap[$sortParam] ?? 'created_at';
+        $orderDirection = strtolower($request->get('order', $request->get('order_direction', 'desc'))) === 'asc' ? 'asc' : 'desc';
         $query->orderBy($orderBy, $orderDirection);
 
         // Paginação
+        // Paginação: suporte ao parâmetro page
         $perPage = $request->get('per_page', 15);
-        $points = $query->paginate($perPage);
+        $page = (int) $request->get('page', 1);
+        $points = $query->paginate($perPage, ['*'], 'page', $page);
 
         // Converter config para array
         $points->getCollection()->transform(function ($point) {
@@ -731,10 +782,13 @@ class PointController extends Controller
         $search = $request->get('search');
         $type = $request->get('type'); // credito ou debito
         $userId = $request->get('user_id');
-        $dateFrom = $request->get('date_from');
-        $dateTo = $request->get('date_to');
-        $sort = $request->get('sort', 'created_at');
-        $order = $request->get('order', 'desc');
+        // Suporte a camelCase e snake_case para datas
+        $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
+        $dateTo = $request->get('dateTo') ?? $request->get('date_to');
+        // Ordenação: suporta sort=createdAt
+        $sortParam = $request->get('sort', 'created_at');
+        $sort = $sortParam === 'createdAt' ? 'created_at' : $sortParam;
+        $order = strtolower($request->get('order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         // Validar parâmetros
         if ($type && !in_array($type, ['credito', 'debito'])) {

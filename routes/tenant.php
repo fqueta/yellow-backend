@@ -250,6 +250,8 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
         Route::patch('admin/redemptions/{id}/status', [RedeemController::class, 'updateStatus'])->name('admin.redemptions.update-status');
         Route::patch('admin/redemptions/{id}/refund', [RedeemController::class, 'refund'])->name('admin.redemptions.refund');
+        // Novo endpoint: excluir resgate
+        Route::delete('admin/redemptions/{id}', [RedeemController::class, 'destroy'])->name('admin.redemptions.destroy');
 
         // Rotas para services
         Route::apiResource('services', ServiceController::class,['parameters' => [

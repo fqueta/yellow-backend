@@ -212,7 +212,7 @@ class PermissionService
         if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all.get' || $name == 'api.options.all'){
             $url = '/settings/system';
         }
-        if($name=='api.point-store.redemptions.show' || $name == 'api.admin.redemptions.refund'){
+        if($name=='api.point-store.redemptions.show' || $name == 'api.admin.redemptions.refund' || $name == 'api.admin.redemptions.destroy'){
             $url = '/redemptions';
         }
         // dd($name,$url);

@@ -55,8 +55,12 @@ class RedeemController extends Controller
             // Query base com relacionamentos
             $query = Redemption::with(['product', 'user'])
                 ->ativos()
-                ->orderBy($orderBy, $order);
-
+                ->orderBy($orderBy, $order)
+                ->where('excluido', 'n');
+            //se a permission_id dele form maior ou igual a 5, então é um parceiro e pode ver todos os resgates
+            if((int)$user->permission_id >= 5){
+                $query->where('autor', $user->id);
+            }
             // Filtros opcionais
             if ($request->filled('status')) {
                 $query->where('status', $request->input('status'));
@@ -569,6 +573,92 @@ class RedeemController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao realizar extorno: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * Excluir (cancelar) um resgate específico
+     * DELETE /admin/redemptions/{id}
+     *
+     * Regras:
+     * - Verifica usuário autenticado e permissão de "delete".
+     * - Se não for admin (permission_id não em [1,2]), só pode excluir resgates cujo autor seja o próprio usuário.
+     * - Normaliza o ID com Qlib::redeem_id.
+     * - Marca exclusão lógica (deletado = 's') e registra histórico de status para 'cancelled'.
+     * - Não realiza crédito de pontos (para crédito use o endpoint de refund).
+     *
+     * @param Request $request
+     * @param string|int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Acesso negado'], 403);
+            }
+
+            // Verificar permissão de exclusão
+            if (!$this->permissionService->isHasPermission('delete')) {
+                return response()->json(['error' => 'Acesso negado'], 403);
+            }
+
+            // Normalizar ID de resgate
+            $id = Qlib::redeem_id($id);
+
+            // Buscar resgate ativo (carrega relação usuário apenas por conveniência)
+            $redemption = Redemption::with(['user'])
+                ->where('id', $id)
+                ->where('excluido', 'n')
+                ->where('deletado', 'n')
+                ->first();
+
+            if (!$redemption) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resgate não encontrado'
+                ], 404);
+            }
+
+            $isAdmin = in_array($user->permission_id, [1, 2]);
+
+            // Se não for admin, garantir que o autor do resgate é o próprio usuário
+            if (!$isAdmin) {
+                if ((string)$redemption->autor !== (string)$user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Você não pode excluir pedidos de outros proprietários'
+                    ], 403);
+                }
+            }
+
+            $oldStatus = $redemption->status;
+
+            // Registrar histórico de cancelamento
+            RedemptionStatusHistory::createHistory(
+                $redemption->id,
+                $oldStatus,
+                'cancelled',
+                'Resgate cancelado/excluído por ' . $user->name,
+                'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
+                $user->name
+            );
+
+            // Marcar exclusão lógica
+            $redemption->status = 'cancelled';
+            $redemption->deletado = 's';
+            $redemption->updated_at = now();
+            $redemption->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Resgate cancelado e excluído com sucesso'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao excluir resgate: ' . $e->getMessage()
             ], 500);
         }
     }
