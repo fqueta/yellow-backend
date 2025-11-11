@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\api\ClientController;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Qlib;
@@ -27,9 +28,11 @@ class DashboardController extends Controller
         $user = $request->user();
         $partnerPermissionId = Qlib::qoption('permission_partner_id') ?? 5;
         $authorId = ($user && (int)($user->permission_id) >= (int)$partnerPermissionId) ? $user->id : null;
-
+        $period = $request->input('period', 14);
         $recentActivities = $this->getRecentClientActivities($authorId);
-        $registrationData = $this->getClientRegistrationData($authorId);
+        // dd($authorId);
+        // dd($user->toArray());
+        $registrationData = $this->getClientRegistrationData($authorId, $period);
         $pendingPreRegistrations = $this->getPendingPreRegistrations($authorId);
         $totals = $this->getDashboardTotals($authorId);
         // dd($pendingPreRegistrations);
@@ -46,10 +49,10 @@ class DashboardController extends Controller
 
     /**
      * Atividades recentes dos clientes
-     * @param int|null $authorId Filtra por autor quando informado
+     * @param int|string|null $authorId Filtra por autor (pode ser int ou string)
      * @return array
      */
-    private function getRecentClientActivities(?int $authorId = null): array
+    private function getRecentClientActivities(int|string|null $authorId = null): array
     {
         // No código original, o método do model recebe dias como primeiro parâmetro.
         return Client::getRecentActivities(20, 20, $authorId);
@@ -57,20 +60,25 @@ class DashboardController extends Controller
 
     /**
      * Dados de cadastro por período (últimos 14 dias)
-     * @param int|null $authorId Filtra por autor quando informado
+     * @param int|string|null $authorId Filtra por autor (pode ser int ou string)
      * @return array
      */
-    private function getClientRegistrationData(?int $authorId = null): array
+    private function getClientRegistrationData(int|string|null $authorId = null, ?int $period = null): array
     {
-        return Client::getRegistrationDataByPeriod(14, $authorId);
+        //adicionar opção para personalizar o período
+        $period = $period ?? 14;
+        // dd($authorId);
+        // Usar ClientController para obter os dados por período
+        $clientController = new ClientController();
+        return $clientController->getRegistrationDataByPeriod($period, $authorId);
     }
 
     /**
      * Pré-cadastros pendentes
-     * @param int|null $authorId Filtra por autor quando informado
+     * @param int|string|null $authorId Filtra por autor (pode ser int ou string)
      * @return array
      */
-    private function getPendingPreRegistrations(?int $authorId = null): array
+    private function getPendingPreRegistrations(int|string|null $authorId = null): array
     {
         $query = Client::select('id', 'name', 'email', 'created_at')
             ->where('status', 'pre_registred')
@@ -94,10 +102,10 @@ class DashboardController extends Controller
 
     /**
      * Totais dos cards do dashboard
-     * @param int|null $authorId Filtra por autor quando informado
+     * @param int|string|null $authorId Filtra por autor (pode ser int ou string)
      * @return array
      */
-    private function getDashboardTotals(?int $authorId = null): array
+    private function getDashboardTotals(int|string|null $authorId = null): array
     {
         return Client::getDashboardTotals($authorId);
     }

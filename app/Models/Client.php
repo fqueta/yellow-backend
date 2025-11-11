@@ -154,44 +154,6 @@ class Client extends User
         return $activities;
     }
 
-    /**
-     * Buscar dados de registro por período
-     * @param int $days Período em dias (inclui hoje)
-     * @param int|null $authorId Filtra por autor (user id) quando informado
-     * @return array
-     */
-    public static function getRegistrationDataByPeriod($days = 14, $authorId = null)
-    {
-        // Subtrai (days - 1) para incluir o dia de hoje no período
-        $startDate = now()->subDays($days - 1);
-        $data = [];
-
-        for ($i = 0; $i < $days; $i++) {
-            $date = $startDate->copy()->addDays($i);
-            $dateStr = $date->format('Y-m-d');
-
-            $data[] = [
-                'date' => $dateStr,
-                'actived' => static::whereDate('created_at', $dateStr)
-                    ->where('status', 'actived')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
-                'inactived' => static::whereDate('created_at', $dateStr)
-                    ->where('status', 'inactived')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
-                'pre_registred' => static::whereDate('created_at', $dateStr)
-                    ->where('status', 'pre_registred')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
-            ];
-        }
-
-        return $data;
-    }
 
     /**
      * Buscar totais do dashboard com variação percentual

@@ -31,6 +31,53 @@ class UserController extends Controller
         }
         return $input;
     }
+
+    /**
+     * PT-BR: Normaliza números de telefone brasileiros.
+     * Remove caracteres não numéricos, trata código do país (55) se presente
+     * e formata em padrões comuns: (DD) XXXXX-XXXX para 11 dígitos e
+     * (DD) XXXX-XXXX para 10 dígitos. Caso não se encaixe, retorna só os dígitos.
+     * EN: Normalize Brazilian phone numbers.
+     * Strips non-digits, handles country code 55 if present, and formats
+     * to common patterns: (DD) XXXXX-XXXX for 11 digits, (DD) XXXX-XXXX for 10.
+     * If length does not match, returns digits-only as fallback.
+     */
+    private function normalizePhone(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        // Keep only digits
+        $digits = preg_replace('/\D+/', '', $phone);
+        if ($digits === '') {
+            return null;
+        }
+
+        // Remove country code 55 if present
+        if (str_starts_with($digits, '55') && (strlen($digits) === 12 || strlen($digits) === 13)) {
+            $digits = substr($digits, 2);
+        }
+
+        // Mobile: 11 digits => (DD) 9XXXX-XXXX
+        if (strlen($digits) === 11) {
+            $ddd = substr($digits, 0, 2);
+            $prefix = substr($digits, 2, 5);
+            $suffix = substr($digits, 7, 4);
+            return "($ddd) $prefix-$suffix";
+        }
+
+        // Landline: 10 digits => (DD) XXXX-XXXX
+        if (strlen($digits) === 10) {
+            $ddd = substr($digits, 0, 2);
+            $prefix = substr($digits, 2, 4);
+            $suffix = substr($digits, 6, 4);
+            return "($ddd) $prefix-$suffix";
+        }
+
+        // Fallback: return digits-only
+        return $digits;
+    }
     protected $permissionService;
     public $routeName;
     public $sec;
@@ -303,7 +350,10 @@ class UserController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * PT-BR: Atualiza o usuário e espelha campos de perfil no config.
+     * Aplica validação, sanitização e normalização compatíveis com updateProfile.
+     * EN: Update user and mirror profile fields into the config.
+     * Applies validation, sanitization and normalization consistent with updateProfile.
      */
     public function update(Request $request, string $id)
     {
@@ -329,7 +379,17 @@ class UserController extends Controller
             'genero'        => ['sometimes', Rule::in(['ni','m','f'])],
             'verificado'    => ['sometimes', Rule::in(['n','s'])],
             'permission_id' => 'nullable|integer',
-            'config'        => 'array'
+            'config'        => 'array',
+            // Campos de perfil (espelhados no config)
+            'company'       => 'sometimes|nullable|string|max:255',
+            'phone'         => 'sometimes|nullable|string|max:255',
+            'bio'           => 'sometimes|nullable|string|max:255',
+            'birth_date'    => 'sometimes|nullable|date',
+            'gender'        => 'sometimes|nullable|string|max:50',
+            'address'       => 'sometimes|nullable|string|max:255',
+            'city'          => 'sometimes|nullable|string|max:255',
+            'state'         => 'sometimes|nullable|string|max:50',
+            'zip_code'      => 'sometimes|nullable|string|max:20',
         ]);
 
 
@@ -351,9 +411,22 @@ class UserController extends Controller
         }
 
         $validated = $validator->validated();
-        // dd($validated,$request->all());
         // Sanitização dos dados
         $validated = $this->sanitizeInput($validated);
+
+        // Normalizações compatíveis com updateProfile
+        if (array_key_exists('phone', $validated) && $validated['phone'] !== null) {
+            $validated['phone'] = $this->normalizePhone($validated['phone']);
+        }
+        if (array_key_exists('zip_code', $validated) && $validated['zip_code'] !== null) {
+            $validated['zip_code'] = $this->normalizeZipCode($validated['zip_code']);
+        }
+        if (array_key_exists('email', $validated) && $validated['email'] !== null) {
+            $validated['email'] = strtolower(trim($validated['email']));
+        }
+        if (array_key_exists('name', $validated) && $validated['name'] !== null) {
+            $validated['name'] = preg_replace('/\s+/', ' ', trim($validated['name']));
+        }
 
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
@@ -361,8 +434,30 @@ class UserController extends Controller
             unset($validated['password']);
         }
 
+        // Espelhar campos de perfil no config
+        $existingConfig = [];
+        if (is_array($userToUpdate->config)) {
+            $existingConfig = $userToUpdate->config;
+        } elseif (is_string($userToUpdate->config) && $userToUpdate->config !== '') {
+            $decoded = json_decode($userToUpdate->config, true);
+            if (is_array($decoded)) {
+                $existingConfig = $decoded;
+            }
+        }
+
+        $profileKeys = ['company','phone','bio','birth_date','gender','address','city','state','zip_code'];
+        foreach ($profileKeys as $k) {
+            if (array_key_exists($k, $validated)) {
+                $existingConfig[$k] = $validated[$k];
+                unset($validated[$k]); // evita tentar salvar coluna inexistente
+            }
+        }
+        // Merge de config do payload (se presente)
         if (isset($validated['config']) && is_array($validated['config'])) {
-            $validated['config'] = json_encode($validated['config']);
+            $existingConfig = array_replace($existingConfig, $validated['config']);
+        }
+        if (!empty($existingConfig)) {
+            $validated['config'] = json_encode($existingConfig);
         }
 
         $userToUpdate->update($validated);
@@ -446,14 +541,27 @@ class UserController extends Controller
      */
     public function updateProfile(Request $request)
     {
-        // dd($request->all());
+        // Obter usuário autenticado antes para regras com ignore
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
         // Validação dos dados recebidos
         $validator = Validator::make($request->all(), [
             'company' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
+            // Email opcional, mas se fornecido, deve ser único (ignorando o próprio usuário)
+            'email' => ['nullable','email','max:255', Rule::unique('users','email')->ignore($user->id)],
             'name' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:255',
-            'bio' => 'nullable|string|max:255'
+            'bio' => 'nullable|string|max:255',
+            // Campos adicionais de perfil
+            'birth_date' => 'nullable|date',
+            'gender' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'state' => 'nullable|string|max:50',
+            'zip_code' => 'nullable|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -463,12 +571,26 @@ class UserController extends Controller
             ], 422);
         }
 
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
-
         $data = $validator->validated();
+        // Sanitização e normalização leve
+        /**
+         * PT-BR: Sanitiza strings (strip_tags/trim), normaliza telefone e padroniza email.
+         * EN: Sanitize strings (strip_tags/trim), normalize phone, and standardize email.
+         */
+        $data = $this->sanitizeInput($data);
+        if (array_key_exists('phone', $data) && $data['phone'] !== null) {
+            $data['phone'] = $this->normalizePhone($data['phone']);
+        }
+        if (array_key_exists('email', $data) && $data['email'] !== null) {
+            $data['email'] = strtolower(trim($data['email']));
+        }
+        if (array_key_exists('name', $data) && $data['name'] !== null) {
+            // Collapse multiple spaces
+            $data['name'] = preg_replace('/\s+/', ' ', trim($data['name']));
+        }
+        if (array_key_exists('zip_code', $data) && $data['zip_code'] !== null) {
+            $data['zip_code'] = $this->normalizeZipCode($data['zip_code']);
+        }
         $results = [];
         $errors = [];
 
@@ -485,8 +607,15 @@ class UserController extends Controller
         }
 
         if (empty($errors)) {
-            $user->name = $data['name'];
-            $user->email = $data['email'];
+            // Atualiza nome e e-mail apenas se fornecidos para evitar índices indefinidos
+            /**
+             * PT-BR: Atualiza os campos base do usuário (name, email) apenas se presentes
+             * na requisição validada, evitando erros de índice e respeitando unicidade do email.
+             * EN: Update basic user fields (name, email) only if provided in validated data,
+             * preventing undefined index errors and honoring email uniqueness.
+             */
+            $user->name = array_key_exists('name', $data) ? $data['name'] : $user->name;
+            $user->email = array_key_exists('email', $data) ? $data['email'] : $user->email;
             $user->save();
             $newData = User::find($user->id);
             // $newData->load('profile');
@@ -501,5 +630,79 @@ class UserController extends Controller
                 'errors' => $errors
             ], 207); // 207 Multi-Status
         }
+    }
+
+    /**
+     * PT-BR: Normaliza CEP brasileiro.
+     * Mantém apenas dígitos e formata como 00000-000 quando possível.
+     * EN: Normalize Brazilian ZIP code (CEP), keeping digits and formatting 00000-000 when possible.
+     */
+    private function normalizeZipCode(?string $zip): ?string
+    {
+        if ($zip === null) {
+            return null;
+        }
+        $digits = preg_replace('/\D+/', '', $zip);
+        if ($digits === '') {
+            return null;
+        }
+        if (strlen($digits) === 8) {
+            return substr($digits,0,5) . '-' . substr($digits,5,3);
+        }
+        return $digits;
+    }
+
+    /**
+     * PT-BR: Retorna os dados de perfil armazenados para o usuário autenticado.
+     * Inclui campos base (id, name, email, avatar) e metacampos (company, phone, bio)
+     * salvos via usermeta com prefixo "profile_".
+     * EN: Return stored profile data for the authenticated user.
+     * Includes base fields (id, name, email, avatar) and meta fields (company, phone, bio)
+     * saved via usermeta with the "profile_" prefix.
+     */
+    public function showProfile(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        $metaKeys = ['company', 'phone', 'bio', 'birth_date', 'gender', 'address', 'city', 'state', 'zip_code'];
+        $profileMeta = [];
+        foreach ($metaKeys as $key) {
+            $profileMeta[$key] = Qlib::get_usermeta($user->id, 'profile_' . $key);
+        }
+
+        // Ensure phone is normalized for presentation
+        if (!empty($profileMeta['phone'])) {
+            $profileMeta['phone'] = $this->normalizePhone($profileMeta['phone']);
+        }
+        if (!empty($profileMeta['zip_code'])) {
+            $profileMeta['zip_code'] = $this->normalizeZipCode($profileMeta['zip_code']);
+        }
+
+        // Avatar from config if available
+        $avatar = null;
+        if (is_array($user->config)) {
+            $avatar = $user->config['avatar'] ?? null;
+        } elseif (is_string($user->config)) {
+            $cfg = json_decode($user->config, true);
+            if (is_array($cfg)) {
+                $avatar = $cfg['avatar'] ?? null;
+            }
+        }
+
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'avatar' => $avatar,
+            'meta' => $profileMeta,
+        ];
+
+        return response()->json([
+            'message' => 'Perfil armazenado',
+            'data' => $data,
+        ], 200);
     }
 }

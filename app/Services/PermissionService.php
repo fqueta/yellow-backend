@@ -154,7 +154,7 @@ class PermissionService
             $url = '/settings/metrics';
         }
         // dd($name);
-        if($name=='api.clients.index' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred' || $name == 'api.clients.create'){
+        if($name=='api.clients.index' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.restore.patch' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred' || $name == 'api.clients.create'){
             $url = '/clients';
         }
 

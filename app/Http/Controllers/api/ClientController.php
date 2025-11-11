@@ -164,6 +164,48 @@ class ClientController extends Controller
             'updated_at' => $client->updated_at,
         ];
     }
+
+    /**
+     * Get client registration data by period
+     *
+     * EN: Returns daily counts for statuses over the last N days, optionally filtered by author.
+     * PT: Retorna contagens diárias de status nos últimos N dias, opcionalmente filtradas por autor.
+     *
+     * @param int $days Número de dias a considerar (inclui hoje)
+     * @param int|string|null $authorId Filtra por autor quando informado (int ou string)
+     * @return array Lista com chaves: `date`, `actived`, `inactived`, `pre_registred`
+     */
+    public function getRegistrationDataByPeriod(int $days = 14, int|string|null $authorId = null): array
+    {
+        $startDate = now()->subDays($days - 1);
+        $data = [];
+
+        for ($i = 0; $i < $days; $i++) {
+            $date = $startDate->copy()->addDays($i);
+            $dateStr = $date->format('Y-m-d');
+
+            $data[] = [
+                'date' => $dateStr,
+                'actived' => Client::whereDate('created_at', $dateStr)
+                    ->where('status', 'actived')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
+                'inactived' => Client::whereDate('created_at', $dateStr)
+                    ->where('status', 'inactived')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
+                'pre_registred' => Client::whereDate('created_at', $dateStr)
+                    ->where('status', 'pre_registred')
+                    ->where('excluido', 'n')
+                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
+                    ->count(),
+            ];
+        }
+
+        return $data;
+    }
     /**
      * Sanitiza os dados de entrada
      */
@@ -1283,6 +1325,9 @@ class ClientController extends Controller
 
     /**
      * Restaurar cliente da lixeira
+     *
+     * EN: Restores a deleted client. Returns clear errors when not found, wrong type, or not in trash.
+     * PT: Restaura um cliente deletado. Retorna erros claros quando não encontrado, tipo inválido ou não está na lixeira.
      */
     public function restore(Request $request, string $id)
     {
@@ -1293,17 +1338,47 @@ class ClientController extends Controller
         if (!$this->permissionService->isHasPermission('delete')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
+        //Buscar o CPF do cliente
+        $client = Client::where('id', $id)->first();
+        // Buscar cliente sem lançar exceção para retornar mensagens mais claras
+        // $client = Client::withoutGlobalScope('client')
+        //     ->where('id', $id)
+        //     ->first();
+        
+        if (!$client) {
+            return response()->json([
+                'error' => 'Cliente não encontrado',
+                'status' => 404
+            ], 404);
+        }
+        $cpf = $client->cpf;
+        // Solicitar retorno em array para uso interno (evita JsonResponse)
+        $result = $this->activate($cpf, 'array');
+        if(!$result['exec']){
+            return response()->json([
+                'error' => $result['message'],
+                'status' => 400
+            ], 400);
+        }
 
-        $client = Client::withoutGlobalScope('client')
-            ->where('id', $id)
-            ->where('deletado', 's')
-            ->where('permission_id', $this->permission_client_id)
-            ->firstOrFail();
+        // if ((int)($client->permission_id) !== (int)$this->permission_client_id) {
+        //     return response()->json([
+        //         'error' => 'Registro informado não é um cliente',
+        //         'status' => 403
+        //     ], 403);
+        // }
 
-        $client->update([
-            'deletado' => 'n',
-            'reg_deletado' => null
-        ]);
+        // if ($client->deletado !== 's') {
+        //     return response()->json([
+        //         'error' => 'Cliente não está na lixeira',
+        //         'status' => 409
+        //     ], 409);
+        // }
+
+        // $client->update([
+        //     'deletado' => 'n',
+        //     'reg_deletado' => null
+        // ]);
 
         return response()->json([
             'message' => 'Cliente restaurado com sucesso',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Point;
 use App\Models\User;
 use App\Services\PermissionService;
+use App\Services\Qlib;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -17,11 +18,13 @@ use Carbon\Carbon;
  */
 class PointController extends Controller
 {
+    public $partner_id;
     protected $permissionService;
 
     public function __construct()
     {
         $this->permissionService = new PermissionService;
+        $this->partner_id = Qlib::qoption('permission_partner_id') ? Qlib::qoption('permission_partner_id') : 5;
     }
 
     /**
@@ -592,9 +595,9 @@ class PointController extends Controller
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'Acesso negado'], 403);
         }
-    
+
         $userId = $user->id;
-    
+
         // Total de pontos ganhos (créditos)
         $totalEarned = (float) \App\Models\Point::where('client_id', $userId)
             ->where('tipo', 'credito')
@@ -602,7 +605,7 @@ class PointController extends Controller
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->sum('valor');
-    
+
         // Total de pontos gastos (débitos)
         $totalSpent = (float) \App\Models\Point::where('client_id', $userId)
             ->where('tipo', 'debito')
@@ -610,14 +613,14 @@ class PointController extends Controller
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->sum('valor');
-    
+
         // Total de transações
         $totalTransactions = (int) \App\Models\Point::where('client_id', $userId)
             ->where('ativo', 's')
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->count();
-    
+
         // Pontos ativos (créditos não expirados - débitos)
         $activeBalance = (float) (\App\Models\Point::where('client_id', $userId)
             ->where('tipo', 'credito')
@@ -629,7 +632,7 @@ class PointController extends Controller
         ) - (float) (\App\Models\Point::where('client_id', $userId)
             ->where('tipo', 'debito')
             ->sum('valor'));
-    
+
         // Pontos expirados (créditos marcados como expirados)
         $expiredPoints = (float) \App\Models\Point::where('client_id', $userId)
             ->where('tipo', 'credito')
@@ -638,10 +641,10 @@ class PointController extends Controller
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->sum('valor');
-    
+
         // Total de pontos (saldo disponível); igualamos ao activeBalance
         $totalPoints = $activeBalance;
-    
+
         $data = [
             'total_points' => (string) (int) $totalPoints,
             'total_earned' => (string) (int) $totalEarned,
@@ -650,7 +653,7 @@ class PointController extends Controller
             'active_points' => (string) (int) $activeBalance,
             'expired_points' => (int) $expiredPoints,
         ];
-    
+
         return response()->json([
             'success' => true,
             'message' => 'OK',
@@ -707,11 +710,16 @@ class PointController extends Controller
         if (!$this->permissionService->isHasPermission('view')) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-
+        $permission_id = $user->permission_id;
         $dataInicio = $request->get('data_inicio', now()->startOfMonth()->format('Y-m-d'));
         $dataFim = $request->get('data_fim', now()->endOfMonth()->format('Y-m-d'));
-
-        $query = Point::porPeriodo($dataInicio, $dataFim);
+        // se o parcerio for diferente de 5, então filtra registros de pontos onde usuario_id for igual a id do usuário logado
+        if ($permission_id >= $this->partner_id) {
+            $query = Point::porPeriodo($dataInicio, $dataFim)
+                          ->where('usuario_id', $permission_id);
+        } else {
+            $query = Point::porPeriodo($dataInicio, $dataFim);
+        }
 
         $relatorio = [
             'periodo' => [
@@ -775,7 +783,7 @@ class PointController extends Controller
         if (!$permissionCheck['success']) {
             return $permissionCheck['response'];
         }
-
+        $user = $request->user();
         // Parâmetros de entrada
         $page = $request->get('page', 1);
         $perPage = $request->get('per_page', 15);
@@ -807,7 +815,12 @@ class PointController extends Controller
 
         // Construir query
         $query = Point::query();
-
+        //desconsidera pontos com excluido=s
+        $query->where('excluido', '!=', 's');
+        //caso seja um usuario com permissão maior ou igua 5 listar apenas pontos em que usuario_id = autor_id
+        if ($user->permission_id >= $this->partner_id) {
+            $query->where('usuario_id', $user->id);
+        }
         // Filtro por usuário específico
         if ($userId) {
             $query->where('client_id', $userId);
@@ -902,39 +915,89 @@ class PointController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getPointsExtractsStats()
+    public function getPointsExtractsStats(Request $request)
     {
+        $user = $request->user();
+
         try {
             // Total de transações
-            $totalTransactions = Point::count();
+            //se o usuario tiver permissão maior ou igual a 5, apenas mostra os pontos do usuario
+            if ($user->permission_id >= $this->partner_id) {
+                $totalTransactions = Point::where('usuario_id', $user->id)->count();
+            } else {
+                $totalTransactions = Point::count();
+            }
 
             // Total de pontos ganhos (crédito)
-            $totalEarned = Point::where('tipo', 'credito')->sum('valor');
+            if ($user->permission_id >= $this->partner_id) {
+                $totalEarned = Point::where('tipo', 'credito')
+                    ->where('usuario_id', $user->id)
+                    ->sum('valor');
+            } else {
+                $totalEarned = Point::where('tipo', 'credito')->sum('valor');
+            }
 
             // Total de pontos resgatados (débito)
-            $totalRedeemed = Point::where('tipo', 'debito')->sum('valor');
+            if ($user->permission_id >= $this->partner_id) {
+                $totalRedeemed = Point::where('tipo', 'debito')
+                    ->where('usuario_id', $user->id)
+                    ->sum('valor');
+            } else {
+                $totalRedeemed = Point::where('tipo', 'debito')->sum('valor');
+            }
 
             // Total de pontos expirados (assumindo que há uma coluna status ou data_expiracao)
-            $totalExpired = Point::where('data_expiracao', '<', now())
-                ->where('tipo', 'credito')
-                ->sum('valor');
+            if ($user->permission_id >= $this->partner_id) {
+                $totalExpired = Point::where('data_expiracao', '<', now())
+                    ->where('tipo', 'credito')
+                    ->where('usuario_id', $user->id)
+                    ->sum('valor');
+            } else {
+                $totalExpired = Point::where('data_expiracao', '<', now())
+                    ->where('tipo', 'credito')
+                    ->sum('valor');
+            }
 
             // Usuários ativos (que têm pelo menos uma transação)
-            $activeUsers = Point::distinct('client_id')->count('client_id');
+            if ($user->permission_id >= $this->partner_id) {
+                $activeUsers = Point::where('usuario_id', $user->id)
+                    ->distinct('client_id')
+                    ->count('client_id');
+            } else {
+                $activeUsers = Point::distinct('client_id')->count('client_id');
+            }
 
             // Total de ajustes (assumindo que ajustes são transações com origem específica)
-            $totalAdjustments = Point::where('origem', 'ajuste')
-                ->orWhere('origem', 'adjustment')
-                ->orWhere('description', 'like', '%ajuste%')
-                ->orWhere('description', 'like', '%adjustment%')
-                ->count();
+            if ($user->permission_id >= $this->partner_id) {
+                $totalAdjustments = Point::where('origem', 'ajuste')
+                    ->orWhere('origem', 'adjustment')
+                    ->orWhere('description', 'like', '%ajuste%')
+                    ->orWhere('description', 'like', '%adjustment%')
+                    ->where('usuario_id', $user->id)
+                    ->count();
+            } else {
+                $totalAdjustments = Point::where('origem', 'ajuste')
+                    ->orWhere('origem', 'adjustment')
+                    ->orWhere('description', 'like', '%ajuste%')
+                    ->orWhere('description', 'like', '%adjustment%')
+                    ->count();
+            }
 
             // Total de reembolsos (assumindo que reembolsos são transações com origem específica)
-            $totalRefunds = Point::where('origem', 'reembolso')
-                ->orWhere('origem', 'refund')
-                ->orWhere('description', 'like', '%reembolso%')
-                ->orWhere('description', 'like', '%refund%')
-                ->count();
+            if ($user->permission_id >= $this->partner_id) {
+                $totalRefunds = Point::where('origem', 'reembolso')
+                    ->orWhere('origem', 'refund')
+                    ->orWhere('description', 'like', '%reembolso%')
+                    ->orWhere('description', 'like', '%refund%')
+                    ->where('usuario_id', $user->id)
+                    ->count();
+            } else {
+                $totalRefunds = Point::where('origem', 'reembolso')
+                    ->orWhere('origem', 'refund')
+                    ->orWhere('description', 'like', '%reembolso%')
+                    ->orWhere('description', 'like', '%refund%')
+                    ->count();
+            }
 
             $stats = [
                 'totalTransactions' => (int) $totalTransactions,

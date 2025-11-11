@@ -14,6 +14,7 @@ class ProductController extends Controller
 {
     protected $permissionService;
     protected $post_type;
+    protected $partner_id;
 
     /**
      * Construtor do controller
@@ -22,6 +23,7 @@ class ProductController extends Controller
     {
         $this->permissionService = new PermissionService();
         $this->post_type = 'products';
+        $this->partner_id = Qlib::qoption('permission_partner_id') ? Qlib::qoption('permission_partner_id') : 5;
     }
 
     /**
@@ -119,6 +121,7 @@ class ProductController extends Controller
         $categoryData = Qlib::get_category_by_id($product->guid);
         $stock = $product->comment_count ?? 0;
         $isActive = $stock > 0;
+        $points = $product->config['points'] ?? null;
         return [
             'id' => $product->ID,
             'name' => $product->post_title, // post_title -> name
@@ -134,7 +137,8 @@ class ProductController extends Controller
             'categoryData' => $categoryData,
             'unitId' => Qlib::get_unit_id_by_name($product->config['unit'] ?? null),
             'unit' => $product->config['unit'] ?? null,
-            'pointsRequired' => $product->config['points'] ?? null,
+            'pointsRequired' => $points,
+            'points' => $points,
             'image' => $product_image,
             'image2' => $image2,
             'rating' => $product->config['rating'] ?? null,
@@ -167,10 +171,13 @@ class ProductController extends Controller
         $perPage = $request->input('per_page', 10);
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
-
+        $permission_id = $user->permission_id;
         $query = Product::query()
             ->orderBy($order_by, $order);
-
+        // se o parcerio for diferente de 5, então filtra registros de produtos onde post_author for igual a id do usuário logado
+        if ($permission_id >= $this->partner_id) {
+            $query->where('post_author', $user->id);
+        }
         // Filtros opcionais
         if ($request->filled('name')) {
             $query->where('post_title', 'like', '%' . $request->input('name') . '%');
@@ -222,6 +229,46 @@ class ProductController extends Controller
         $products->getCollection()->transform(function ($item) {
             return $this->mapDatabaseToFrontend($item);
         });
+        return response()->json($products);
+    }
+
+    /**
+     * PT-BR: Lista produtos para exibição na loja (vitrine),
+     * aplicando filtros obrigatórios de disponibilidade e status ativo.
+     *
+     * EN: Lists products to display in the store (showcase),
+     * enforcing availability and active status filters.
+     */
+    public function indexStore(Request $request)
+    {
+        // Parâmetros de paginação e ordenação
+        $perPage = $request->input('per_page', 12);
+        $order_by = $request->input('order_by', 'created_at');
+        $order = $request->input('order', 'desc');
+
+        $query = Product::query()->orderBy($order_by, $order);
+
+        // Filtros obrigatórios para vitrine: ativo e com estoque (>0)
+        $activeStatus = $this->get_status(true);
+        $query->where('post_status', $activeStatus);
+        $query->where('comment_count', '>', 0);
+
+        // Filtros opcionais
+        if ($request->filled('name')) {
+            $query->where('post_title', 'like', '%' . $request->input('name') . '%');
+        }
+        if ($request->filled('slug')) {
+            $query->where('post_name', 'like', '%' . $request->input('slug') . '%');
+        }
+        if ($request->filled('category')) {
+            $query->where('guid', $request->input('category'));
+        }
+
+        $products = $query->paginate($perPage);
+        $products->getCollection()->transform(function ($item) {
+            return $this->mapDatabaseToFrontend($item);
+        });
+
         return response()->json($products);
     }
     /**

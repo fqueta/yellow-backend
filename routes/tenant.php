@@ -63,13 +63,6 @@ Route::middleware([
     // // Route::get('/', function () {
     //     //     return 'This is your multi-tenant application. The id of the current tenant is ' . tenant('id');
     //     // });
-    // // Route::middleware(['auth', 'verified'])->group(function () {
-    // //     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    // //     // Route::get('profile', function () {
-    // //     //     return Inertia::render('profile');
-    // //     // })->name('profile');
-    // // });
-
     // require __DIR__.'/settings.php';
     require __DIR__.'/auth.php';
 
@@ -109,7 +102,8 @@ Route::name('api.')->prefix('api/v1')->middleware([
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('user',[UserController::class,'perfil'])->name('perfil.user');
         Route::get('user/can',[UserController::class,'can_access'])->name('perfil.can');
-        Route::put('user/profile',[UserController::class,'updateProfile'])->name('user.profile.update');
+    Route::get('user/profile',[UserController::class,'showProfile'])->name('user.profile.show');
+    Route::put('user/profile',[UserController::class,'updateProfile'])->name('user.profile.update');
         Route::put('user/change-password',[UserController::class,'changePassword'])->name('user.change.password');
         Route::post('/logout',[AuthController::class,'logout'])->name('logout');
         // Rota do dashboard
@@ -133,6 +127,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         // Rotas específicas de clientes (devem vir antes do apiResource)
         Route::get('clients/trash', [ClientController::class, 'trash'])->name('clients.trash');
         Route::put('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore');
+        Route::patch('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore.patch');
         Route::delete('clients/{id}/force', [ClientController::class, 'forceDelete'])->name('clients.forceDelete');
 
         Route::apiResource('clients', ClientController::class,['parameters' => [
@@ -245,13 +240,13 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::put('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
         Route::delete('products/{id}/force', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
         Route::post('products/redeem', [ProductController::class, 'redeem'])->name('products.redeem');
+        // Produtos de vitrine (loja) - autenticado
+        Route::get('point-store/products', [ProductController::class, 'indexStore'])->name('point-store.products.index');
         Route::get('point-store/redemptions', [ProductController::class, 'getUserRedemptions'])->name('products.user-redemptions');
         Route::get('point-store/redemptions/{id}', [RedeemController::class, 'show'])->name('point-store.redemptions.show');
         Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
         Route::patch('admin/redemptions/{id}/status', [RedeemController::class, 'updateStatus'])->name('admin.redemptions.update-status');
         Route::patch('admin/redemptions/{id}/refund', [RedeemController::class, 'refund'])->name('admin.redemptions.refund');
-        // Novo endpoint: excluir resgate
-        Route::delete('admin/redemptions/{id}', [RedeemController::class, 'destroy'])->name('admin.redemptions.destroy');
 
         // Rotas para services
         Route::apiResource('services', ServiceController::class,['parameters' => [
