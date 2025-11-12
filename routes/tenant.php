@@ -86,6 +86,13 @@ Route::name('api.')->prefix('api/v1')->middleware([
         return app(PasswordResetLinkController::class)->store($request, true);
     })->name('password.email');
 
+    // API: Reset password with token
+    // Accepts JSON body: { email, password, password_confirmation, token }
+    Route::post('reset-password', [\App\Http\Controllers\api\NewPasswordController::class, 'store'])
+        ->name('password.store.api');
+    Route::get('reset-password/validate', [\App\Http\Controllers\api\NewPasswordController::class, 'validateToken'])
+        ->name('password.validate.api');
+
     // Rotas públicas para tokens de formulário
     Route::post('public/form-token', [PublicFormTokenController::class, 'generateToken'])->name('public.form-token.generate');
     Route::post('public/form-token/validate', [PublicFormTokenController::class, 'validateToken'])->name('public.form-token.validate');

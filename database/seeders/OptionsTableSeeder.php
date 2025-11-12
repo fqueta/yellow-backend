@@ -68,6 +68,12 @@ class OptionsTableSeeder extends Seeder
                 'url'   => 'redirect_url_login_alloyal',
                 'tags'  => 'alloyal',
             ],
+            [
+                'name'  => 'Url do Front-End',
+                'value' => 'https://cl.yellowbc.com.br/',
+                'url'   => 'frontend_url',
+                'tags'  => 'frontend',
+            ],
         ]);
     }
 }
