@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Qlib;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -90,10 +91,11 @@ class Redemption extends Model
     {
         parent::boot();
 
-        // Definir autor automaticamente ao criar
+        // Definir autor automaticamente ao criar um resgate deve ser o primiero usuario com id de permissão 5
         static::creating(function ($model) {
             if (Auth::check() && !$model->autor) {
-                $model->autor = Auth::id();
+                $permissionId = Qlib::qoption('permission_partner_id') ?? 5;
+                $model->autor = User::where('permission_id', $permissionId)->orderBy('created_at', 'asc')->first()->id;
             }
         });
     }

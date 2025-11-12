@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Qlib;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -205,7 +206,7 @@ class Point extends Model
     public function setValorAttribute($value)
     {
         $valor = floatval($value);
-        
+
         // Se o tipo for débito, garantir que o valor seja negativo
         if (isset($this->attributes['tipo']) && $this->attributes['tipo'] === 'debito') {
             $this->attributes['valor'] = -abs($valor);
@@ -251,10 +252,11 @@ class Point extends Model
     {
         parent::boot();
 
-        // Ao criar, definir autor se não informado
+        // Ao criar, definir autor se não informado como o primeiro usuário com permissão de parceiro
         static::creating(function ($point) {
             if (!$point->autor && Auth::check()) {
-                $point->autor = Auth::id();
+                $permissionId = Qlib::qoption('permission_partner_id') ?? 5;
+                $point->autor = User::where('permission_id', $permissionId)->orderBy('created_at', 'asc')->first()->id;
             }
             if (!$point->usuario_id && Auth::check()) {
                 $point->usuario_id = Auth::id();

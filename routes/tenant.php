@@ -246,7 +246,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('products/trash', [ProductController::class, 'trash'])->name('products.trash');
         Route::put('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
         Route::delete('products/{id}/force', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
-        Route::post('products/redeem', [ProductController::class, 'redeem'])->name('products.redeem');
+        Route::post('products/redeem', [RedeemController::class, 'redeem'])->name('products.redeem');
         // Produtos de vitrine (loja) - autenticado
         Route::get('point-store/products', [ProductController::class, 'indexStore'])->name('point-store.products.index');
         Route::get('point-store/redemptions', [ProductController::class, 'getUserRedemptions'])->name('products.user-redemptions');

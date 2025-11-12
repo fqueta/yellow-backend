@@ -14,6 +14,8 @@ use App\Notifications\UserRedemptionRefundNotification;
 use App\Services\PermissionService;
 use App\Services\Qlib;
 use App\Jobs\SendRedemptionStatusUpdateNotification;
+use App\Jobs\SendRedemptionNotification;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -29,6 +31,177 @@ class RedeemController extends Controller
     {
         $this->permissionService = new PermissionService();
         $this->post_type = 'products';
+    }
+
+    /**
+     * Processar resgate de pontos por produto
+     *
+     * Recebe `product_id`, `quantity` e opcionalmente `config`, valida o estoque
+     * e o saldo de pontos do usuário, cria o registro de resgate, debita pontos
+     * e atualiza o estoque do produto. Também dispara notificação assíncrona.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function redeem(Request $request)
+    {
+        try {
+            // Validar dados de entrada
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                'product_id' => 'required|integer|exists:posts,ID',
+                'quantity' => 'required|integer|min:1',
+                'config' => 'nullable|array',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors(),
+                    'status' => 422,
+                ], 422);
+            }
+
+            $user = $request->user();
+            $productId = $request->product_id;
+            $quantity = $request->quantity;
+            // Buscar o produto
+            $product = Qlib::buscaPostsPorId($productId);
+            if (!$product) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não encontrado',
+                    'status' => 404,
+                ], 404);
+            }
+
+            // Verificar se o produto está ativo
+            if ($product['post_status'] !== 'publish') {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não está disponível para resgate',
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Verificar estoque disponível (usa comment_count como estoque)
+            $stock = $product['comment_count'] ?? 0;
+            if ($stock < $quantity) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Estoque insuficiente. Disponível: ' . $stock,
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Obter pontos necessários por unidade
+            $unitPoints = floatval($product['config']['points'] ?? 0);
+            if ($unitPoints <= 0) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Produto não possui pontos configurados',
+                    'status' => 400,
+                ], 400);
+            }
+
+            // Calcular total de pontos necessários
+            $totalPointsNeeded = $unitPoints * $quantity;
+
+            // Verificar saldo de pontos do usuário
+            $pointController = new PointController();
+            $userPointsBalance = $pointController->saldo($user->id);
+
+            if ($userPointsBalance < $totalPointsNeeded) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Pontos insuficientes. Necessário: ' . $totalPointsNeeded . ', Disponível: ' . $userPointsBalance,
+                    'status' => 400,
+                ], 400);
+            }
+
+            $config = $request->config ?? [];
+            $nomeCliente = $user->name;
+            $ipCliente = $request->header('X-Forwarded-For') ?? $request->ip();
+            //preciso saber o proprietário do cliente para associar o resgate ao cliente
+            $autor = $user->autor;
+            $dataSave = [
+                'user_id' => $user->id,
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'points_used' => $totalPointsNeeded,
+                'unit_points' => $unitPoints,
+                'status' => 'pending',
+                'autor' => $autor,
+                'config' => $config,
+                'notes' => 'Resgate solicitado via Loja de pontos por ' . $nomeCliente . ' ::: IP: ' . $ipCliente,
+            ];
+            // dd($dataSave,$user);
+
+            // Criar o registro de resgate
+            $redemption = \App\Models\Redemption::create($dataSave);
+
+            // Criar snapshot do produto
+            $redemption->createProductSnapshot();
+
+            // Registrar débito de pontos
+            \App\Models\Point::create([
+                'client_id' => $user->id,
+                'valor' => $totalPointsNeeded * (-1),
+                'data' => now(),
+                'description' => 'Resgate de produto: ' . $product['post_title'] . ' (Qtd: ' . $quantity . ')',
+                'tipo' => 'debito',
+                'origem' => 'resgate_produto',
+                'status' => 'ativo',
+                'autor' => $autor,
+                'pedido_id' => $redemption->id,
+                'config' => [
+                    'redemption_id' => $redemption->id,
+                    'product_id' => $productId,
+                    'quantity' => $quantity,
+                ],
+            ]);
+
+            // Atualizar estoque do produto
+            $newStock = $stock - $quantity;
+            $config = $product['config'];
+            $config['stock'] = $newStock;
+
+            Qlib::update_postmeta($productId, 'stock', $newStock);
+            // atualizar o estoque no campo comment_count da tabela post
+            Product::where('ID', $productId)->update(['comment_count' => $newStock]);
+
+            // Disparar job para envio de notificações por email
+            $productModel = Product::find($productId);
+            SendRedemptionNotification::dispatch(
+                $user,
+                $productModel,
+                $redemption,
+                $quantity,
+                $totalPointsNeeded
+            );
+
+            return response()->json([
+                'exec' => true,
+                'message' => 'Resgate processado com sucesso',
+                'data' => [
+                    'redemption_id' => $redemption->id,
+                    'product_name' => $product['post_title'],
+                    'quantity' => $quantity,
+                    'points_used' => $totalPointsNeeded,
+                    'remaining_points' => $userPointsBalance - $totalPointsNeeded,
+                    'status' => $redemption->status,
+                    'estimated_delivery' => $product['config']['delivery_time'] ?? 'Não informado',
+                ],
+                'status' => 200,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'exec' => false,
+                'message' => 'Erro interno do servidor: ' . $e->getMessage(),
+                'status' => 500,
+            ], 500);
+        }
     }
 
     /**
@@ -57,9 +230,18 @@ class RedeemController extends Controller
                 ->ativos()
                 ->orderBy($orderBy, $order)
                 ->where('excluido', 'n');
+
             //se a permission_id dele form maior ou igual a 5, então é um parceiro e pode ver todos os resgates
             if((int)$user->permission_id >= 5){
                 $query->where('autor', $user->id);
+                //verificar a string sql completa para debug sem ? na string
+                // dd([
+                //     'sql' => vsprintf(str_replace('?', "'%s'", $query->toSql()), $query->getBindings()),
+                //     'bindings' => $query->getBindings(),
+                //     'query' => $query->get(),
+                //     'count' => $query->count(),
+                // ]);
+                // dd($query->get());
             }
             // Filtros opcionais
             if ($request->filled('status')) {
@@ -505,7 +687,7 @@ class RedeemController extends Controller
                     'description' => 'Estorno do resgate #' . Qlib::redeem_id($redemption->id),
                     'data_expiracao' => now()->addYear(),
                     'usuario_id' => $user->id,
-                    'autor' => 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
+                    'autor' => $user->id,
                     'created_at' => now(),
                     'updated_at' => now(),
                     'data' => now()->format('Y-m-d'),

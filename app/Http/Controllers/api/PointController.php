@@ -817,9 +817,9 @@ class PointController extends Controller
         $query = Point::query();
         //desconsidera pontos com excluido=s
         $query->where('excluido', '!=', 's');
-        //caso seja um usuario com permissão maior ou igua 5 listar apenas pontos em que usuario_id = autor_id
+        //caso seja um usuario com permissão maior ou igua 5 listar apenas pontos em que autor = autor_id
         if ($user->permission_id >= $this->partner_id) {
-            $query->where('usuario_id', $user->id);
+            $query->where('autor', $user->id);
         }
         // Filtro por usuário específico
         if ($userId) {
