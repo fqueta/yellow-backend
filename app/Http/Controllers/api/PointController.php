@@ -909,10 +909,57 @@ class PointController extends Controller
             ]
         ]);
     }
+    /**Metoodo para marcar pontos como excluido no extrato de pontos deve localizar registro pelo pedido_id tambem */
+    /**
+     * Excluir um ponto do extrato de pontos
+     *
+     * @param int $pointId id do ponto ou id do pedido
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteFromPointsHistory($pointId)
+    {
+        // Verificar se o usuário tem permissão para excluir
+        $user = request()->user();
+        if ($user->permission_id < $this->partner_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Permissão insuficiente'
+            ], 403);
+        }
+        // Encontra o ponto pelo ID
+        $point = Point::find($pointId);
+        //se nao encontrar pelo id, tenta encontrar pelo pedido_id
+        if (!$point) {
+            $point = Point::where('pedido_id', $pointId)->first();
+        }
+        if (!$point) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ponto não encontrado'
+            ], 404);
+        }
+
+        // Marca o ponto como excluído
+        $point->excluido = 's';
+        // $point->updated_at = now();
+        $point->reg_excluido = ['data' => now()->toDateTimeString(),'excluido_por' => $user->id];
+        $point->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ponto excluído com sucesso'
+        ]);
+    }
 
     /**
-     * Obter estatísticas dos extratos de pontos
+     * Obter estatísticas dos extratos de pontos com filtros.
+     * Aceita filtros via query string:
+     * - `type`: "credito" ou "debito" (opcional)
+     * - `dateFrom`/`date_from`: data inicial (YYYY-MM-DD)
+     * - `dateTo`/`date_to`: data final (YYYY-MM-DD)
+     * As estatísticas respeitam o escopo de permissões do usuário.
      *
+     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function getPointsExtractsStats(Request $request)
@@ -920,99 +967,122 @@ class PointController extends Controller
         $user = $request->user();
 
         try {
-            // Total de transações
-            //se o usuario tiver permissão maior ou igual a 5, apenas mostra os pontos do usuario
-            if ($user->permission_id >= $this->partner_id) {
-                $totalTransactions = Point::where('usuario_id', $user->id)->count();
-            } else {
-                $totalTransactions = Point::count();
+            // Ler e normalizar filtros de entrada
+            $type = $request->get('type'); // "credito" ou "debito"
+            $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
+            $dateTo   = $request->get('dateTo')   ?? $request->get('date_to');
+
+            // Validar tipo quando informado
+            if ($type && !in_array($type, ['credito', 'debito'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parâmetro "type" inválido. Use "credito" ou "debito".'
+                ], 422);
             }
 
+            // Query base considerando permissões e registros não excluídos
+            $baseQuery = Point::query()
+                ->where('excluido', '!=', 's');
+
+            if ($user && $user->permission_id >= $this->partner_id) {
+                $baseQuery->where('usuario_id', $user->id);
+            }
+
+            // Aplicar filtros de período
+            if ($dateFrom) {
+                $baseQuery->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+            }
+            if ($dateTo) {
+                $baseQuery->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            }
+
+            // Total de transações (respeita filtro de tipo quando fornecido)
+            $transactionsQuery = clone $baseQuery;
+            if ($type) {
+                $transactionsQuery->where('tipo', $type);
+            }
+            $totalTransactions = (int) $transactionsQuery->count();
+
             // Total de pontos ganhos (crédito)
-            if ($user->permission_id >= $this->partner_id) {
-                $totalEarned = Point::where('tipo', 'credito')
-                    ->where('usuario_id', $user->id)
-                    ->sum('valor');
+            if ($type === 'debito') {
+                $totalEarned = 0; // escopo filtrado por débito
             } else {
-                $totalEarned = Point::where('tipo', 'credito')->sum('valor');
+                $earnedQuery = clone $baseQuery;
+                $earnedQuery->where('tipo', 'credito');
+                $totalEarned = (int) $earnedQuery->sum('valor');
             }
 
             // Total de pontos resgatados (débito)
-            if ($user->permission_id >= $this->partner_id) {
-                $totalRedeemed = Point::where('tipo', 'debito')
-                    ->where('usuario_id', $user->id)
-                    ->sum('valor');
+            if ($type === 'credito') {
+                $totalRedeemed = 0; // escopo filtrado por crédito
             } else {
-                $totalRedeemed = Point::where('tipo', 'debito')->sum('valor');
+                $redeemedQuery = clone $baseQuery;
+                $redeemedQuery->where('tipo', 'debito');
+                $totalRedeemed = (int) $redeemedQuery->sum('valor');
             }
 
-            // Total de pontos expirados (assumindo que há uma coluna status ou data_expiracao)
-            if ($user->permission_id >= $this->partner_id) {
-                $totalExpired = Point::where('data_expiracao', '<', now())
-                    ->where('tipo', 'credito')
-                    ->where('usuario_id', $user->id)
-                    ->sum('valor');
+            // Total de pontos expirados (apenas créditos)
+            if ($type === 'debito') {
+                $totalExpired = 0; // não há expiração para débitos
             } else {
-                $totalExpired = Point::where('data_expiracao', '<', now())
-                    ->where('tipo', 'credito')
-                    ->sum('valor');
+                $expiredQuery = clone $baseQuery;
+                $expiredQuery->where('tipo', 'credito')
+                             ->where('data_expiracao', '<', now());
+                $totalExpired = (int) $expiredQuery->sum('valor');
             }
 
-            // Usuários ativos (que têm pelo menos uma transação)
-            if ($user->permission_id >= $this->partner_id) {
-                $activeUsers = Point::where('usuario_id', $user->id)
-                    ->distinct('client_id')
-                    ->count('client_id');
-            } else {
-                $activeUsers = Point::distinct('client_id')->count('client_id');
+            // Usuários ativos (com pelo menos uma transação no escopo)
+            $activeUsersQuery = clone $baseQuery;
+            if ($type) {
+                $activeUsersQuery->where('tipo', $type);
             }
+            $activeUsers = (int) $activeUsersQuery->distinct('client_id')->count('client_id');
 
-            // Total de ajustes (assumindo que ajustes são transações com origem específica)
-            if ($user->permission_id >= $this->partner_id) {
-                $totalAdjustments = Point::where('origem', 'ajuste')
-                    ->orWhere('origem', 'adjustment')
-                    ->orWhere('description', 'like', '%ajuste%')
-                    ->orWhere('description', 'like', '%adjustment%')
-                    ->where('usuario_id', $user->id)
-                    ->count();
-            } else {
-                $totalAdjustments = Point::where('origem', 'ajuste')
-                    ->orWhere('origem', 'adjustment')
-                    ->orWhere('description', 'like', '%ajuste%')
-                    ->orWhere('description', 'like', '%adjustment%')
-                    ->count();
+            // Total de ajustes (origem/descrição sugerindo ajuste)
+            $adjustmentsQuery = clone $baseQuery;
+            $adjustmentsQuery->where(function ($q) {
+                $q->where('origem', 'ajuste')
+                  ->orWhere('origem', 'adjustment')
+                  ->orWhere('description', 'like', '%ajuste%')
+                  ->orWhere('description', 'like', '%adjustment%');
+            });
+            if ($type) {
+                $adjustmentsQuery->where('tipo', $type);
             }
+            $totalAdjustments = (int) $adjustmentsQuery->count();
 
-            // Total de reembolsos (assumindo que reembolsos são transações com origem específica)
-            if ($user->permission_id >= $this->partner_id) {
-                $totalRefunds = Point::where('origem', 'reembolso')
-                    ->orWhere('origem', 'refund')
-                    ->orWhere('description', 'like', '%reembolso%')
-                    ->orWhere('description', 'like', '%refund%')
-                    ->where('usuario_id', $user->id)
-                    ->count();
-            } else {
-                $totalRefunds = Point::where('origem', 'reembolso')
-                    ->orWhere('origem', 'refund')
-                    ->orWhere('description', 'like', '%reembolso%')
-                    ->orWhere('description', 'like', '%refund%')
-                    ->count();
+            // Total de reembolsos (origem/descrição sugerindo reembolso)
+            $refundsQuery = clone $baseQuery;
+            $refundsQuery->where(function ($q) {
+                $q->where('origem', 'reembolso')
+                  ->orWhere('origem', 'refund')
+                  ->orWhere('description', 'like', '%reembolso%')
+                  ->orWhere('description', 'like', '%refund%');
+            });
+            if ($type) {
+                $refundsQuery->where('tipo', $type);
             }
+            $totalRefunds = (int) $refundsQuery->count();
 
             $stats = [
-                'totalTransactions' => (int) $totalTransactions,
-                'totalEarned' => (int) $totalEarned,
-                'totalRedeemed' => (int) $totalRedeemed,
-                'totalExpired' => (int) $totalExpired,
-                'activeUsers' => (int) $activeUsers,
-                'totalAdjustments' => (int) $totalAdjustments,
-                'totalRefunds' => (int) $totalRefunds
+                'totalTransactions' => $totalTransactions,
+                'totalEarned' => $totalEarned,
+                'totalRedeemed' => $totalRedeemed,
+                'totalExpired' => $totalExpired,
+                'activeUsers' => $activeUsers,
+                'totalAdjustments' => $totalAdjustments,
+                'totalRefunds' => $totalRefunds,
+                'filters' => [
+                    'type' => $type,
+                    'dateFrom' => $dateFrom,
+                    'dateTo' => $dateTo,
+                ],
             ];
 
             return response()->json([
                 'success' => true,
                 'data' => $stats
-            ]);
+            ], 200);
 
         } catch (Exception $e) {
             return response()->json([

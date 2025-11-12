@@ -23,7 +23,7 @@ class RedeemController extends Controller
 {
     protected $permissionService;
     protected $post_type;
-
+    protected $pointController;
     /**
      * Construtor do controller
      */
@@ -31,6 +31,7 @@ class RedeemController extends Controller
     {
         $this->permissionService = new PermissionService();
         $this->post_type = 'products';
+        $this->pointController = new PointController();
     }
 
     /**
@@ -804,7 +805,7 @@ class RedeemController extends Controller
             }
 
             $isAdmin = in_array($user->permission_id, [1, 2]);
-
+            // dd($redemption);
             // Se não for admin, garantir que o autor do resgate é o próprio usuário
             if (!$isAdmin) {
                 if ((string)$redemption->autor !== (string)$user->id) {
@@ -814,6 +815,8 @@ class RedeemController extends Controller
                     ], 403);
                 }
             }
+            //excluir do extrato de pontos
+            // $this->pointService->deleteFromPointsHistory($redemption->id);
 
             $oldStatus = $redemption->status;
 
@@ -826,6 +829,8 @@ class RedeemController extends Controller
                 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
                 $user->name
             );
+            //excluir do extrato de pontos
+            $this->pointController->deleteFromPointsHistory($redemption->id);
 
             // Marcar exclusão lógica
             $redemption->status = 'cancelled';
