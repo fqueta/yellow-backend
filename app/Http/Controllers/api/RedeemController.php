@@ -206,8 +206,18 @@ class RedeemController extends Controller
     }
 
     /**
-     * Lista todos os resgates para administradores
-     * Retorna os resgates com informações detalhadas do usuário e produto
+     * Lista resgates (admin) com filtros e paginação
+     *
+     * Aceita filtros:
+     * - page: página atual (default: 1)
+     * - per_page: itens por página (default: 10)
+     * - dateFrom|date_from: filtra data inicial (created_at >=)
+     * - dateTo|date_to: filtra data final (created_at <=)
+     * - category: filtra pela categoria do produto (Category.name)
+     * - status, user_id, product_id: filtros existentes mantidos
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
@@ -223,8 +233,13 @@ class RedeemController extends Controller
             }
 
             $perPage = $request->input('per_page', 10);
+            $page = (int) $request->input('page', 1);
             $orderBy = $request->input('order_by', 'created_at');
             $order = $request->input('order', 'desc');
+            // Normalizar datas e categoria (suporta snake_case e camelCase)
+            $dateFrom = $request->input('dateFrom', $request->input('date_from'));
+            $dateTo = $request->input('dateTo', $request->input('date_to'));
+            $categoryName = $request->input('category');
 
             // Query base com relacionamentos
             $query = Redemption::with(['product', 'user'])
@@ -257,16 +272,33 @@ class RedeemController extends Controller
                 $query->where('product_id', $request->input('product_id'));
             }
 
-            if ($request->filled('date_from')) {
-                $query->whereDate('created_at', '>=', $request->input('date_from'));
+            // Filtro por período
+            if (!empty($dateFrom)) {
+                $query->whereDate('created_at', '>=', $dateFrom);
+            }
+            if (!empty($dateTo)) {
+                $query->whereDate('created_at', '<=', $dateTo);
             }
 
-            if ($request->filled('date_to')) {
-                $query->whereDate('created_at', '<=', $request->input('date_to'));
+            // Filtro por categoria do produto (Category.name) via guid
+            if (!empty($categoryName)) {
+                try {
+                    $categoryIds = \App\Models\Category::where('name', $categoryName)->pluck('id');
+                    if ($categoryIds && $categoryIds->count() > 0) {
+                        $query->whereHas('product', function ($q) use ($categoryIds) {
+                            $q->whereIn('guid', $categoryIds);
+                        });
+                    } else {
+                        // Nenhuma categoria encontrada => força retorno vazio
+                        $query->whereRaw('1 = 0');
+                    }
+                } catch (\Exception $e) {
+                    // Em caso de erro ao buscar categoria, não aplicar filtro
+                }
             }
 
             // Buscar com paginação
-            $redemptions = $query->paginate($perPage);
+            $redemptions = $query->paginate($perPage, ['*'], 'page', $page);
 
             // Mapear dados para o formato solicitado
             $mappedRedemptions = $redemptions->getCollection()->map(function ($redemption) {
@@ -280,7 +312,17 @@ class RedeemController extends Controller
                     'current_page' => $redemptions->currentPage(),
                     'last_page' => $redemptions->lastPage(),
                     'per_page' => $redemptions->perPage(),
-                    'total' => $redemptions->total()
+                    'total' => $redemptions->total(),
+                    'filters' => [
+                        'page' => $page,
+                        'per_page' => $perPage,
+                        'dateFrom' => $dateFrom,
+                        'dateTo' => $dateTo,
+                        'category' => $categoryName,
+                        'status' => $request->input('status'),
+                        'user_id' => $request->input('user_id'),
+                        'product_id' => $request->input('product_id'),
+                    ],
                 ],
                 'message' => 'Resgates listados com sucesso',
                 'success' => true
@@ -306,6 +348,22 @@ class RedeemController extends Controller
         $categoryData = null;
         $productImage = null;
         $productImage2 = null;
+        // Determinar telefone do usuário com múltiplos fallbacks (prioriza config.celular)
+        $userPhone = null;
+        if ($user) {
+            try {
+                $configArr = is_array($user->config)
+                    ? $user->config
+                    : (is_string($user->config) ? (json_decode($user->config, true) ?? []) : []);
+                // Prioridade: config['celular'] > user.phone > user.telefone > config['phone'] > config['telefone']
+                $userPhone = $configArr['celular']
+                    ?? $user->phone
+                    ?? $user->telefone
+                    ?? ($configArr['phone'] ?? $configArr['telefone'] ?? null);
+            } catch (\Exception $e) {
+                $userPhone = $user->phone ?? $user->telefone ?? null;
+            }
+        }
         if ($product) {
             // Obter dados da categoria apenas se guid não for null
             if (!empty($product->guid)) {
@@ -369,7 +427,9 @@ class RedeemController extends Controller
             'userId' => $user ? 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT) : null,
             'userName' => $user ? $user->name : 'Usuário não encontrado',
             'userEmail' => $user ? $user->email : null,
-            'userPhone' => $user ? ($user->phone ?? $user->telefone ?? null) : null,
+            'userPhone' => $userPhone,
+            'clientPhone' => $userPhone, // alias para compatibilidade
+            'phone' => $userPhone, // alias simples
             'productId' => $product ? 'P' . str_pad($product->ID, 3, '0', STR_PAD_LEFT) : null,
             'productName' => $product ? $product->post_title : 'Produto não encontrado',
             'productImage' => $productImage ?: '/placeholder.svg',

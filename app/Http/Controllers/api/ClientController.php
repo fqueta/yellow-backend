@@ -776,6 +776,7 @@ class ClientController extends Controller
             'email'         => ['nullable','email', Rule::unique('users','email')->ignore($client->id)],
             'name' => 'required|string|max:255',
             'password' => 'required|string|min:6',
+            'phone' => 'nullable|string|max:20',
         ];
         $mensage = [
             'email.required' => 'O campo e-mail é obrigatório',
@@ -784,6 +785,7 @@ class ClientController extends Controller
             'name.required' => 'O campo nome é obrigatório',
             'password.required' => 'O campo senha é obrigatório',
             'password.min' => 'A senha deve ter pelo menos 6 caracteres',
+            'phone.required' => 'O campo telefone é obrigatório',
         ];
         $data_update = $request->all();
         /**Sanitizar dados antes de atualizar */
@@ -807,7 +809,10 @@ class ClientController extends Controller
         // $d_salvar['permission_id'] = $client->permission_id;
 
         try {
+            //incluir o phone no cadastro de config.celular
+            $d_salvar['config']['celular'] = $d_salvar['phone'] ?? null;
             //code...
+            // dd($d_salvar);
             //Enviar cadastro para API da alloyal
             $client->update($d_salvar);
             $d_send_api = $d_salvar;
@@ -1344,7 +1349,7 @@ class ClientController extends Controller
         // $client = Client::withoutGlobalScope('client')
         //     ->where('id', $id)
         //     ->first();
-        
+
         if (!$client) {
             return response()->json([
                 'error' => 'Cliente não encontrado',
