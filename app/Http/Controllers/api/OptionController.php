@@ -60,20 +60,6 @@ class OptionController extends Controller
         }
 
         $options = $query->paginate($perPage);
-        // Converter value para array em cada opção
-        // $options->getCollection()->transform(function ($option) {
-        //     if (is_string($option->value)) {
-        //         $valueArr = json_decode($option->value, true) ?? [];
-        //         dd($valueArr);
-        //         array_walk($valueArr, function (&$value) {
-        //             if (is_null($value)) {
-        //                 $value = (string)'';
-        //             }
-        //         });
-        //         $option->value = $valueArr;
-        //     }
-        //     return $option;
-        // });
         if($this->sec=='all'){
             $ret = $options;
         }else{
