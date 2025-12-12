@@ -448,6 +448,7 @@ class RedeemController extends Controller
             'priority' => $priority,
             'actualDelivery' => $redemption->actual_delivery_date ? \Carbon\Carbon::parse($redemption->actual_delivery_date)->toISOString() : null,
             'adminNotes' => $redemption->admin_notes ?? null,
+            'config' => $redemption->config ?? null,
             'statusHistory' => $statusHistory
         ];
     }
@@ -467,6 +468,39 @@ class RedeemController extends Controller
         ];
 
         return $statusMap[$status] ?? $status;
+    }
+
+    /**
+     * Mescla o `config` existente do resgate com novos valores.
+     *
+     * - Preserva chaves já existentes no `config` do resgate.
+     * - Aceita `config` armazenado como array ou string JSON.
+     * - Ignora valores nulos do novo `config` para evitar sobrescrita com null.
+     *
+     * @param \App\Models\Redemption $redemption O resgate contendo o config atual
+     * @param array $newConfig Novos pares de configuração a adicionar/atualizar
+     * @return array Configuração resultante após o merge
+     */
+    private function mergeRedemptionConfig($redemption, array $newConfig): array
+    {
+        try {
+            $existing = $redemption->config;
+            if (is_string($existing)) {
+                $decoded = json_decode($existing, true);
+                $existing = is_array($decoded) ? $decoded : [];
+            } elseif (!is_array($existing)) {
+                $existing = [];
+            }
+        } catch (\Throwable $e) {
+            $existing = [];
+        }
+
+        // Filtra valores nulos do novo config
+        $filteredNew = array_filter($newConfig, function ($v) {
+            return !is_null($v);
+        });
+
+        return array_merge($existing, $filteredNew);
     }
 
     /**
@@ -592,7 +626,8 @@ class RedeemController extends Controller
                     $redemption->actual_delivery_date = now()->setTimezone(config('app.timezone'))->format('Y-m-d');
                 }
                 if($request->get('trackingCode')){
-                    $redemption->config = $config;
+                    // Mesclar novo config com o existente para não perder dados anteriores
+                    $redemption->config = $this->mergeRedemptionConfig($redemption, $config);
                 }
 
                 // Adicionar nota administrativa sobre a mudança
@@ -609,7 +644,8 @@ class RedeemController extends Controller
                 $redemption->save();
             }else{
                 if($request->get('trackingCode')){
-                    $redemption->config = $config;
+                    // Mesclar novo config com o existente para não perder dados anteriores
+                    $redemption->config = $this->mergeRedemptionConfig($redemption, $config);
                     $redemption->save();
                 }
             }
