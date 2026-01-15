@@ -24,7 +24,9 @@ return new class extends Migration
                 ->update(['status' => 'confirmed']);
             
             // Alterar a coluna enum para os novos valores
-            DB::statement("ALTER TABLE redemptions MODIFY COLUMN status ENUM('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending' COMMENT 'Status do resgate'");
+            if (DB::getDriverName() !== 'sqlite') {
+                DB::statement("ALTER TABLE redemptions MODIFY COLUMN status ENUM('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending' COMMENT 'Status do resgate'");
+            }
         }
     }
 
@@ -41,7 +43,9 @@ return new class extends Migration
                 ->update(['status' => 'approved']);
             
             // Reverter a coluna enum para os valores antigos
-            DB::statement("ALTER TABLE redemptions MODIFY COLUMN status ENUM('pending', 'approved', 'processing', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending' COMMENT 'Status do resgate'");
+            if (DB::getDriverName() !== 'sqlite') {
+                DB::statement("ALTER TABLE redemptions MODIFY COLUMN status ENUM('pending', 'approved', 'processing', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending' COMMENT 'Status do resgate'");
+            }
         }
     }
 };

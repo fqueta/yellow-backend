@@ -14,8 +14,12 @@ return [
         'http://yellow-dev.localhost:8000', // Para XAMPP local
         'http://localhost:8000', // Para desenvolvimento local
         'http://127.0.0.1:8000', // Para desenvolvimento local
+        'http://localhost:2000', // Frontend Vite (Novo)
+        'http://127.0.0.1:2000', // Frontend Vite (Novo)
     ],
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^http://.*\.localhost(:[0-9]+)?$#', // Regex válida para subdomínios locais
+    ],
     'allowed_headers' => ['*', 'x-form-token'],
     'exposed_headers' => [],
     'max_age' => 0,

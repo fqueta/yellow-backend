@@ -23,6 +23,11 @@ class UserSeeder extends Seeder
                 'status' => 'actived',
                 'verificado' => 'n',
                 'permission_id' => 1, // Grupo Master
+                'tipo_pessoa' => 'pf',
+                'genero' => 'm',
+                'ativo' => 's',
+                'excluido' => 'n',
+                'deletado' => 'n',
             ],
             [
                 // 'id' => Qlib::token(),
@@ -32,6 +37,11 @@ class UserSeeder extends Seeder
                 'status' => 'actived',
                 'verificado' => 'n',
                 'permission_id' => 2, // Grupo Administrador
+                'tipo_pessoa' => 'pf',
+                'genero' => 'ni',
+                'ativo' => 's',
+                'excluido' => 'n',
+                'deletado' => 'n',
             ],
             [
                 // 'id' => Qlib::token(),
@@ -41,6 +51,11 @@ class UserSeeder extends Seeder
                 'status' => 'actived',
                 'verificado' => 'n',
                 'permission_id' => 6, // Grupo CLientes
+                'tipo_pessoa' => 'pf',
+                'genero' => 'ni',
+                'ativo' => 's',
+                'excluido' => 'n',
+                'deletado' => 'n',
             ],
         ];
 

@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->validateCsrfTokens(except: [
+            '/create-tenant',
+        ]);
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         // CORS deve ser o primeiro middleware

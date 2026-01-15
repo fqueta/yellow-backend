@@ -162,7 +162,11 @@ class PartnerController extends Controller
         $validated['permission_id'] = $this->partner_permission_id;
         $validated['deletado'] = 'n';
         $validated['ativo'] = 's';
-        // $validated['status'] = 'ativo';
+        $validated['status'] = 'actived';
+        if (!isset($validated['verificado'])) {
+            $validated['verificado'] = 'n';
+        }
+        $validated['excluido'] = 'n';
         $validated['autor'] = $user->id;
 
         // Tratar config se fornecido
