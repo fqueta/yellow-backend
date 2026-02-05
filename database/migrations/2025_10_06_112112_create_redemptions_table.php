@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('redemptions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade')->comment('ID do usuário que fez o resgate');
-            $table->foreignId('product_id')->constrained('posts')->onDelete('cascade')->comment('ID do produto resgatado');
+            $table->foreignUuid('user_id')->constrained()->onDelete('cascade')->comment('ID do usuário que fez o resgate');
+            $table->unsignedInteger('product_id')->comment('ID do produto resgatado'); // FK removed: posts table is tenant-specific
             $table->integer('quantity')->default(1)->comment('Quantidade de produtos resgatados');
             $table->decimal('pontos', 10, 2)->comment('Total de pontos utilizados (legacy)');
             $table->decimal('points_used', 10, 2)->comment('Quantidade de pontos utilizados');

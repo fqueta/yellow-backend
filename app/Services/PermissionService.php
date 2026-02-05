@@ -167,7 +167,7 @@ class PermissionService
         if($name=='api.financial.index' || $name == 'api.financial.update' || $name == 'api.financial.show' || $name == 'api.financial.store' || $name == 'api.financial.destroy' || $name == 'api.financial.restore' || $name == 'api.financial.forceDelete' || $name == 'api.financial.trash' || $name == 'api.financial.markAsPaid' || $name == 'api.financial.summary'){
             $url = '/financial';
         }
-        if($name=='api.points.index' || $name == 'api.points.update' || $name == 'api.points.show' || $name == 'api.points.store' || $name == 'api.points.destroy' || $name == 'api.points.restore' || $name == 'api.points.forceDelete' || $name == 'api.points.trash' || $name == 'api.points.saldoCliente' || $name == 'api.points.relatorio' || $name == 'api.points.expirarPontos'){
+        if($name=='api.points.index' || $name == 'perfil.user' || $name == 'api.points.update' || $name == 'api.points.show' || $name == 'api.points.store' || $name == 'api.points.destroy' || $name == 'api.points.restore' || $name == 'api.points.forceDelete' || $name == 'api.points.trash' || $name == 'api.points.saldoCliente' || $name == 'api.points.relatorio' || $name == 'api.points.expirarPontos'){
             $url = '/points';
         }
         if($name == 'api.admin.users.points-balance' || $name == 'api.admin.points-extracts' || $name == 'api.admin.points-extracts.show' || $name == 'api.admin.users.points-extracts'){
@@ -194,7 +194,7 @@ class PermissionService
         if($name=='api.product-units.index' || $name == 'api.product-units.update' || $name == 'api.product-units.show' || $name == 'api.product-units.store' || $name == 'api.product-units.destroy' || $name == 'api.product-units.restore' || $name == 'api.product-units.forceDelete' || $name == 'api.product-units.trash'){
             $url = '/products';
         }
-        if($name=='api.products.index' || $name == 'api.products.user-redemptions' || $name == 'api.admin.redemptions' || $name == 'api.admin.redemptions.update-status' || $name == 'api.products.update' || $name == 'api.products.show' || $name == 'api.products.store' || $name == 'api.products.destroy' || $name == 'api.products.restore' || $name == 'api.products.forceDelete' || $name == 'api.products.trash'){
+        if($name=='api.products.index' || $name == 'api.products.user-redemptions' || $name == 'api.admin.redemptions' || $name == 'api.products.update' || $name == 'api.products.show' || $name == 'api.products.store' || $name == 'api.products.destroy' || $name == 'api.products.restore' || $name == 'api.products.forceDelete' || $name == 'api.products.trash'){
             $url = '/products';
         }
         if($name=='api.services.index' || $name == 'api.services.update' || $name == 'api.services.show' || $name == 'api.services.store' || $name == 'api.services.destroy' || $name == 'api.services.restore' || $name == 'api.services.forceDelete' || $name == 'api.services.trash'){
@@ -212,7 +212,7 @@ class PermissionService
         if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all.get' || $name == 'api.options.all'){
             $url = '/settings/system';
         }
-        if($name=='api.point-store.redemptions.show' || $name == 'api.admin.redemptions.refund' || $name == 'api.admin.redemptions.destroy'){
+        if($name=='api.point-store.redemptions.show' || $name == 'api.admin.redemptions.update-status' || $name == 'api.admin.redemptions.refund' || $name == 'api.admin.redemptions.destroy'){
             $url = '/redemptions';
         }
         // dd($name,$url);
