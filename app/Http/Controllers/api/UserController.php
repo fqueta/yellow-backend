@@ -97,9 +97,9 @@ class UserController extends Controller
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('view')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
+        // if (!$this->permissionService->isHasPermission('view')) {
+        //     return response()->json(['error' => 'Acesso negado'], 403);
+        // }
         $perPage = $request->input('per_page', 10);
         $order_by = $request->input('order_by', 'created_at');
         $order = $request->input('order', 'desc');
@@ -198,9 +198,9 @@ class UserController extends Controller
         if(!$user){
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('create')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
+        // if (!$this->permissionService->isHasPermission('create')) {
+        //     return response()->json(['error' => 'Acesso negado'], 403);
+        // }
         // Verifica se já existe usuário deletado com o mesmo CPF
         if (!empty($request->cpf)) {
             $userCpfDel = User::where('cpf', $request->cpf)
@@ -287,9 +287,9 @@ class UserController extends Controller
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('view')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
+        // if (!$this->permissionService->isHasPermission('view')) {
+        //     return response()->json(['error' => 'Acesso negado'], 403);
+        // }
         $user = User::findOrFail($id);
         return response()->json($user,201);
     }
@@ -361,9 +361,9 @@ class UserController extends Controller
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('edit')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
-        }
+        // if (!$this->permissionService->isHasPermission('edit')) {
+        //     return response()->json(['error' => 'Acesso negado'], 403);
+        // }
 
         $userToUpdate = User::findOrFail($id);
 
