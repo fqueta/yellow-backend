@@ -427,6 +427,7 @@ class RedeemController extends Controller
             'userId' => $user ? 'U' . str_pad($user->id, 3, '0', STR_PAD_LEFT) : null,
             'userName' => $user ? $user->name : 'Usuário não encontrado',
             'userEmail' => $user ? $user->email : null,
+            'userCpf' => $user ? $user->cpf : null,
             'userPhone' => $userPhone,
             'clientPhone' => $userPhone, // alias para compatibilidade
             'phone' => $userPhone, // alias simples

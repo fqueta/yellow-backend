@@ -878,6 +878,7 @@ class PointController extends Controller
                 'userId' => (string) $point->client_id,
                 'userName' => $user ? $user->name : 'N/A',
                 'userEmail' => $user ? $user->email : 'N/A',
+                'userCpf' => $user ? $user->cpf : null,
                 'type' => $point->tipo === 'credito' ? 'earned' : 'redeemed',
                 // 'points' => $point->tipo === 'credito' ? (int) $point->valor : -(int) $point->valor,
                 'points' => $point->valor,
