@@ -25,6 +25,7 @@ use App\Http\Controllers\api\ServiceController;
 use App\Http\Controllers\api\ServiceUnitController;
 use App\Http\Controllers\api\ServiceOrderController;
 use App\Http\Controllers\api\RegisterController;
+use App\Http\Controllers\api\SystemLogController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\MenuController;
@@ -102,9 +103,6 @@ Route::name('api.')->prefix('api/v1')->middleware([
         ->middleware('validate.public.form.token')
         ->name('clients.active');
 
-    Route::fallback(function () {
-        return response()->json(['message' => 'Rota não encontrada'], 404);
-    });
     Route::get('products-public',[ProductController::class,'index_public'])->name('product.public');
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('user',[UserController::class,'perfil'])->name('perfil.user');
@@ -136,6 +134,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::put('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore');
         Route::patch('clients/{id}/restore', [ClientController::class, 'restore'])->name('clients.restore.patch');
         Route::delete('clients/{id}/force', [ClientController::class, 'forceDelete'])->name('clients.forceDelete');
+        Route::get('clients/export', [ClientController::class, 'export'])->name('clients.export');
 
         Route::apiResource('clients', ClientController::class,['parameters' => [
             'clients' => 'id'
@@ -158,6 +157,9 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::delete('financial/{id}/force', [FinancialController::class, 'forceDelete'])->name('financial.forceDelete');
         Route::put('financial/{id}/mark-as-paid', [FinancialController::class, 'markAsPaid'])->name('financial.markAsPaid');
         Route::get('financial/summary', [FinancialController::class, 'summary'])->name('financial.summary');
+
+        // Logs do Sistema
+        Route::get('system-logs', [SystemLogController::class, 'index'])->name('system-logs.index');
 
         // Rotas para points
         Route::apiResource('points', PointController::class,['parameters' => [
@@ -320,6 +322,8 @@ Route::name('api.')->prefix('api/v1')->middleware([
 
     });
 
-
+    Route::fallback(function () {
+        return response()->json(['message' => 'Rota não encontrada'], 404);
+    });
 
 });

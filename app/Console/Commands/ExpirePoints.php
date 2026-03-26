@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Point;
 use App\Models\User;
+use App\Models\SystemLog;
 use App\Notifications\PointsExpiredNotification;
 use Illuminate\Console\Command;
 use Stancl\Tenancy\Tenancy;
@@ -45,14 +46,34 @@ class ExpirePoints extends Command
                         $this->line("  Tenant [{$tenant->id}]: {$count} pontos expirados");
                         $this->notifyAdmins($count, $tenant->id);
                     }
+
+                    // Criar log do sistema no banco do tenant
+                    SystemLog::create([
+                        'event_type' => 'point_expiration_daily',
+                        'status' => 'success',
+                        'description' => "Rotina diária de expiração de pontos concluída.",
+                        'metadata' => [
+                            'total_expired' => $count
+                        ],
+                    ]);
                 });
             }
         } else {
             // Sem multi-tenancy
-            $totalExpirados = $this->expirePointsForCurrentContext();
-            if ($totalExpirados > 0) {
-                $this->notifyAdmins($totalExpirados, null);
+            $count = $this->expirePointsForCurrentContext();
+            $totalExpirados += $count;
+            if ($count > 0) {
+                $this->notifyAdmins($count, null);
             }
+
+            SystemLog::create([
+                'event_type' => 'point_expiration_daily',
+                'status' => 'success',
+                'description' => "Rotina diária de expiração de pontos concluída.",
+                'metadata' => [
+                    'total_expired' => $count
+                ],
+            ]);
         }
 
         $this->info("Concluído! Total de pontos expirados: {$totalExpirados}");
@@ -70,6 +91,27 @@ class ExpirePoints extends Command
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->get();
+
+        if ($admins->isEmpty()) {
+            SystemLog::create([
+                'event_type' => 'admin_notification_skip',
+                'status' => 'warning',
+                'description' => "Nenhum administrador encontrado para notificar (Tenant: {$tenantId}).",
+                'metadata' => ['expired_count' => $expiredCount, 'tenant_id' => $tenantId]
+            ]);
+            return;
+        }
+
+        SystemLog::create([
+            'event_type' => 'admin_notification_start',
+            'status' => 'info',
+            'description' => "Iniciando notificação de " . $admins->count() . " administradores sobre expiração de pontos.",
+            'metadata' => [
+                'expired_count' => $expiredCount,
+                'tenant_id' => $tenantId,
+                'admins_count' => $admins->count()
+            ]
+        ]);
 
         foreach ($admins as $admin) {
             try {

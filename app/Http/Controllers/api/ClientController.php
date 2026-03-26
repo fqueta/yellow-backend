@@ -1416,4 +1416,64 @@ class ClientController extends Controller
             'status' => 200
         ]);
     }
+
+    /**
+     * Exportar clientes para XLSX/PDF
+     * Retorna todos os clientes baseado no filtro de status
+     */
+    public function export(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+
+        $status = $request->input('status', 'all');
+        $orderBy = $request->input('order_by', 'name');
+        $order = $request->input('order', 'asc');
+        
+        $query = Client::query()->where('permission_id', '=', $this->permission_id);
+
+        if ($user && (int)$user->permission_id >= 3) {
+            $query->where('autor', $user->id);
+        }
+
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $query->where(function($q) {
+            $q->whereNull('deletado')->orWhere('deletado', '!=', 's');
+        });
+        $query->where(function($q) {
+            $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
+        });
+
+        $allowedOrderBy = ['name', 'created_at', 'email', 'cpf', 'cnpj'];
+        $allowedOrder = ['asc', 'desc'];
+        
+        if (in_array($orderBy, $allowedOrderBy) && in_array($order, $allowedOrder)) {
+            $query->orderBy($orderBy, $order);
+        } else {
+            $query->orderBy('name', 'asc');
+        }
+
+        $clients = $query->get();
+
+        $clients = $clients->transform(function ($client) {
+            if (is_string($client->config)) {
+                $configArr = json_decode($client->config, true) ?? [];
+                $client->config = is_array($configArr) ? $configArr : [];
+            } else {
+                $client->config = is_array($client->config) ? $client->config : [];
+            }
+            $client->autor_name = $client->autor ? User::find($client->autor)->name : '';
+            return $client;
+        });
+
+        return response()->json([
+            'data' => $clients,
+            'total' => $clients->count()
+        ]);
+    }
 }

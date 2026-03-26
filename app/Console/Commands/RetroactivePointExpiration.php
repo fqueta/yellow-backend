@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Point;
+use App\Models\SystemLog;
 use App\Services\Qlib;
 use App\Notifications\PointsExpiredNotification;
 use Carbon\Carbon;
@@ -36,13 +37,33 @@ class RetroactivePointExpiration extends Command
                         $this->line("  Tenant [{$tenant->id}]: {$count} pontos atualizados retroativamente.");
                         $this->notifyAdmins($count, $tenant->id);
                     }
+
+                    // Registro de LOG do Sistema no banco do tenant
+                    SystemLog::create([
+                        'event_type' => 'point_expiration_retroactive',
+                        'status' => 'success',
+                        'description' => "Rotina de expiração retroativa de pontos concluída.",
+                        'metadata' => [
+                            'total_updated' => $count
+                        ],
+                    ]);
                 });
             }
         } else {
-            $totalAtualizados = $this->applyExpirationForCurrentContext();
-            if ($totalAtualizados > 0) {
-                $this->notifyAdmins($totalAtualizados, null);
+            $count = $this->applyExpirationForCurrentContext();
+            $totalAtualizados += $count;
+            if ($count > 0) {
+                $this->notifyAdmins($count, null);
             }
+
+            SystemLog::create([
+                'event_type' => 'point_expiration_retroactive',
+                'status' => 'success',
+                'description' => "Rotina de expiração retroativa de pontos concluída.",
+                'metadata' => [
+                    'total_updated' => $count
+                ],
+            ]);
         }
 
         $this->info("Concluído! Total de pontos atualizados retroativamente: {$totalAtualizados}");
@@ -97,6 +118,27 @@ class RetroactivePointExpiration extends Command
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->get();
+
+        if ($admins->isEmpty()) {
+            SystemLog::create([
+                'event_type' => 'admin_notification_skip',
+                'status' => 'warning',
+                'description' => "Nenhum administrador encontrado para notificar sobre expiração retroativa (Tenant: {$tenantId}).",
+                'metadata' => ['updated_count' => $count, 'tenant_id' => $tenantId]
+            ]);
+            return;
+        }
+
+        SystemLog::create([
+            'event_type' => 'admin_notification_start',
+            'status' => 'info',
+            'description' => "Iniciando notificação de " . $admins->count() . " administradores sobre expiração retroativa.",
+            'metadata' => [
+                'updated_count' => $count,
+                'tenant_id' => $tenantId,
+                'admins_count' => $admins->count()
+            ]
+        ]);
 
         foreach ($admins as $admin) {
             try {

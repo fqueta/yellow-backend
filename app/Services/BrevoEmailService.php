@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\SystemLog;
 use Exception;
 
 class BrevoEmailService
@@ -78,6 +79,18 @@ class BrevoEmailService
                     'message_id' => $result['messageId'] ?? null,
                     'to' => $to
                 ]);
+
+                SystemLog::create([
+                    'event_type' => 'email_notification',
+                    'status' => 'success',
+                    'description' => 'Email enviado com sucesso para ' . implode(', ', array_map(fn($t) => $t['email'] ?? '', $to)),
+                    'metadata' => [
+                        'subject' => $subject,
+                        'message_id' => $result['messageId'] ?? null,
+                        'to' => $to
+                    ]
+                ]);
+
                 return [
                     'success' => true,
                     'message_id' => $result['messageId'] ?? null,
@@ -90,6 +103,19 @@ class BrevoEmailService
                     'error' => $error,
                     'to' => $to
                 ]);
+
+                SystemLog::create([
+                    'event_type' => 'email_notification_failed',
+                    'status' => 'error',
+                    'description' => 'Erro da API ao enviar email para ' . implode(', ', array_map(fn($t) => $t['email'] ?? '', $to)),
+                    'metadata' => [
+                        'subject' => $subject,
+                        'http_status' => $response->status(),
+                        'error_response' => $error,
+                        'to' => $to
+                    ]
+                ]);
+
                 throw new Exception('Erro na API Brevo: ' . ($error['message'] ?? 'Erro desconhecido'));
             }
         } catch (Exception $e) {
@@ -97,6 +123,18 @@ class BrevoEmailService
                 'error' => $e->getMessage(),
                 'to' => $to
             ]);
+
+            SystemLog::create([
+                'event_type' => 'email_notification_failed',
+                'status' => 'error',
+                'description' => 'Exceção interna ao enviar email para ' . implode(', ', array_map(fn($t) => $t['email'] ?? '', $to)),
+                'metadata' => [
+                    'subject' => $subject,
+                    'error_message' => $e->getMessage(),
+                    'to' => $to
+                ]
+            ]);
+
             throw $e;
         }
     }
