@@ -261,24 +261,31 @@ class Point extends Model
             if (!$point->usuario_id && Auth::check()) {
                 $point->usuario_id = Auth::id();
             }
-        });
 
-        // Verificar expiração ao recuperar
-        static::retrieved(function ($point) {
-            if ($point->expirado && $point->status === 'ativo') {
-                $point->update(['status' => 'expirado']);
+            // Auto-definir data_expiracao para créditos quando não informada
+            if (!$point->data_expiracao && $point->tipo === 'credito') {
+                $diasExpiracao = Qlib::qoption('pontos_dias_expiracao');
+                if ($diasExpiracao && (int) $diasExpiracao > 0) {
+                    $dataBase = $point->data ? Carbon::parse($point->data) : Carbon::now();
+                    $point->data_expiracao = $dataBase->addDays((int) $diasExpiracao)->format('Y-m-d');
+                }
             }
         });
     }
 
     /**
      * Método estático para calcular saldo de pontos de um cliente
+     * Exclui pontos expirados em tempo real (por data_expiracao e status)
      */
     public static function saldoCliente($clienteId): float
     {
         $creditos = self::where('client_id', $clienteId)
                        ->where('tipo', 'credito')
                        ->ativos()
+                       ->where(function ($q) {
+                           $q->whereNull('data_expiracao')
+                             ->orWhere('data_expiracao', '>', now());
+                       })
                        ->sum('valor');
 
         $debitos = self::where('client_id', $clienteId)

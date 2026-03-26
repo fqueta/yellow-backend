@@ -388,7 +388,7 @@ class PointController extends Controller
         return $point;
     }
     public function saldo($client_id){
-        $saldo = Point::where('client_id',$client_id)->sum('valor');
+        $saldo = Point::saldoCliente($client_id);
         return $saldo;
     }
     /**

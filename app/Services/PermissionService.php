@@ -209,7 +209,7 @@ class PermissionService
         if($name=='api.dashboard-metrics.index' || $name == 'api.dashboard-metrics.update' || $name == 'api.dashboard-metrics.show' || $name == 'api.dashboard-metrics.store' || $name == 'api.dashboard-metrics.destroy' || $name == 'api.dashboard-metrics.import-aeroclube'){
             $url = '/settings/metrics';
         }
-        if($name=='api.options.index' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all.get' || $name == 'api.options.all'){
+        if($name=='api.options.index' || $name == 'api.options.all.get' || $name == 'api.options.all.post' || $name == 'api.options.update' || $name == 'api.options.show' || $name == 'api.options.store' || $name == 'api.options.destroy' || $name == 'api.options.all.get' || $name == 'api.options.all'){
             $url = '/settings/system';
         }
         if($name=='api.point-store.redemptions.show' || $name == 'api.admin.redemptions.update-status' || $name == 'api.admin.redemptions.refund' || $name == 'api.admin.redemptions.destroy'){
