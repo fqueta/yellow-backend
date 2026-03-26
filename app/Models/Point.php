@@ -264,10 +264,13 @@ class Point extends Model
 
             // Auto-definir data_expiracao para créditos quando não informada
             if (!$point->data_expiracao && $point->tipo === 'credito') {
-                $diasExpiracao = Qlib::qoption('pontos_dias_expiracao');
-                if ($diasExpiracao && (int) $diasExpiracao > 0) {
-                    $dataBase = $point->data ? Carbon::parse($point->data) : Carbon::now();
-                    $point->data_expiracao = $dataBase->addDays((int) $diasExpiracao)->format('Y-m-d');
+                $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
+                if ($expiracaoAtiva === 's') {
+                    $diasExpiracao = Qlib::qoption('pontos_dias_expiracao');
+                    if ($diasExpiracao && (int) $diasExpiracao > 0) {
+                        $dataBase = $point->data ? Carbon::parse($point->data) : Carbon::now();
+                        $point->data_expiracao = $dataBase->addDays((int) $diasExpiracao)->format('Y-m-d');
+                    }
                 }
             }
         });

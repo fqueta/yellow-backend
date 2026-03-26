@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Point;
 use App\Models\User;
 use App\Models\SystemLog;
+use App\Services\Qlib;
 use App\Notifications\PointsExpiredNotification;
 use Illuminate\Console\Command;
 use Stancl\Tenancy\Tenancy;
@@ -26,6 +27,17 @@ class ExpirePoints extends Command
     public function handle()
     {
         $this->info('Iniciando expiração de pontos...');
+
+        $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
+        if ($expiracaoAtiva !== 's') {
+            $this->warn('Funcionalidade de expiração de pontos desativada globalmente. Ignorando rotina.');
+            SystemLog::create([
+                'event_type' => 'point_expiration_skipped',
+                'status' => 'info',
+                'description' => "A rotina de expiração de pontos foi ignorada pois a funcionalidade está desativida nas configurações.",
+            ]);
+            return 0;
+        }
 
         $totalExpirados = 0;
 
