@@ -1431,11 +1431,16 @@ class ClientController extends Controller
         $status = $request->input('status', 'all');
         $orderBy = $request->input('order_by', 'name');
         $order = $request->input('order', 'asc');
+        $autor = $request->input('autor', 'all');
         
         $query = Client::query()->where('permission_id', '=', $this->permission_id);
 
         if ($user && (int)$user->permission_id >= 3) {
+            // Usuários com permission_id >= 3 só veem seus próprios clientes
             $query->where('autor', $user->id);
+        } elseif ($autor !== 'all') {
+            // Admin/gerente pode filtrar por autor específico
+            $query->where('autor', $autor);
         }
 
         if ($status !== 'all') {
