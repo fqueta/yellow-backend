@@ -586,8 +586,101 @@ class PointController extends Controller
     }
 
     /**
-     * Obter extrato de pontos de um usuário específico
-     * GET /admin/users/{userId}/points-balance
+     * Obter extrato de pontos do usuário autenticado
+     * GET /api/v1/user/points/extract
+     */
+    public function getAuthenticatedUserPointsExtract(\Illuminate\Http\Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Acesso negado'], 403);
+        }
+
+        $userId = $user->id;
+
+        // Parâmetros de paginação e filtros
+        $perPage = $request->get('per_page', 15);
+        $page = (int) $request->get('page', 1);
+        $type = $request->get('type'); // credito, debito
+        $search = $request->get('search');
+        $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
+        $dateTo = $request->get('dateTo') ?? $request->get('date_to');
+
+        // Query base para pontos do usuário
+        $queryBuilder = \App\Models\Point::where('client_id', $userId)
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->where('ativo', 's');
+
+        // Aplicar filtros
+        if ($type && in_array($type, ['credito', 'debito'])) {
+            $queryBuilder->where('tipo', $type);
+        }
+
+        if ($dateFrom) {
+            $queryBuilder->where('created_at', '>=', \Carbon\Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo) {
+            $queryBuilder->where('created_at', '<=', \Carbon\Carbon::parse($dateTo)->endOfDay());
+        }
+
+        if ($search) {
+            $queryBuilder->where(function($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
+                  ->orWhere('pedido_id', 'like', "%{$search}%");
+            });
+        }
+
+        $queryBuilder->orderBy('created_at', 'desc');
+
+        $points = $queryBuilder->paginate($perPage, ['*'], 'page', $page);
+
+        // Mapear para o formato esperado pelo frontend
+        $items = collect($points->items())->map(function($point) {
+            // Mapeamento de tipo para o frontend
+            $typeMapping = [
+                'credito' => 'earned',
+                'debito' => 'redeemed',
+                'bonus' => 'bonus',
+                'ajuste' => 'adjustment',
+                'reembolso' => 'refund',
+                'expiracao' => 'expired'
+            ];
+
+            // Calcular saldo antes e depois da transação
+            $balanceBefore = $this->calculateBalanceBefore($point);
+            $balanceAfter = $this->calculateBalanceAfter($point);
+
+            return [
+                'id' => (string)$point->id,
+                'userId' => (string)$point->client_id,
+                'type' => $typeMapping[$point->tipo] ?? 'adjustment',
+                'points' => (float)$point->valor,
+                'description' => $point->description,
+                'reference' => $point->pedido_id,
+                'balanceBefore' => (float)$balanceBefore,
+                'balanceAfter' => (float)$balanceAfter,
+                'createdAt' => $point->created_at->toISOString(),
+                'status' => $point->status
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $items,
+            'pagination' => [
+                'current_page' => $points->currentPage(),
+                'last_page' => $points->lastPage(),
+                'per_page' => $points->perPage(),
+                'total' => $points->total(),
+            ]
+        ], 200);
+    }
+
+    /**
+     * Obter extrato de pontos do usuário autenticado (estatísticas simplificadas)
+     * GET /api/v1/user/points/balance
      */
     public function getAuthenticatedUserBalance(\Illuminate\Http\Request $request)
     {
@@ -598,39 +691,52 @@ class PointController extends Controller
 
         $userId = $user->id;
 
+        // Parâmetros de filtros (opcionais para a totalização)
+        $type = $request->get('type');
+        $search = $request->get('search');
+        $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
+        $dateTo = $request->get('dateTo') ?? $request->get('date_to');
+
         // Base query para filtros comuns
-        $queryBuilder = \App\Models\Point::where('client_id', $userId)
+        $baseQuery = \App\Models\Point::where('client_id', $userId)
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->where('ativo', 's');
 
-        // Total de pontos ganhos (créditos histórico, independente de expirado ou não)
-        $totalEarned = (float) (clone $queryBuilder)->where('tipo', 'credito')->sum('valor');
+        // Aplicar filtros se informados
+        $filteredQuery = clone $baseQuery;
+        if ($dateFrom) {
+            $filteredQuery->where('created_at', '>=', \Carbon\Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo) {
+            $filteredQuery->where('created_at', '<=', \Carbon\Carbon::parse($dateTo)->endOfDay());
+        }
+        if ($search) {
+            $filteredQuery->where(function($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
+                  ->orWhere('pedido_id', 'like', "%{$search}%");
+            });
+        }
 
-        // Total de pontos gastos (débitos histórico, absoluto para o relatório)
-        $totalSpent = abs((float) (clone $queryBuilder)->where('tipo', 'debito')->sum('valor'));
+        // Total de pontos ganhos
+        $totalEarned = (float) (clone $filteredQuery)->where('tipo', 'credito')->sum('valor');
 
-        // Total de transações (excluindo removidas)
-        $totalTransactions = (int) (clone $queryBuilder)->count();
+        // Total de pontos gastos (absoluto)
+        $totalSpent = abs((float) (clone $filteredQuery)->where('tipo', 'debito')->sum('valor'));
 
-        // Saldo disponível usando o método centralizado no Model
+        // Saldo disponível (global, não filtrado por data, pois saldo é cumulativo)
         $activeBalance = \App\Models\Point::saldoCliente($userId);
 
-        // Pontos expirados (créditos com status expirado)
-        $expiredPoints = (float) (clone $queryBuilder)->where('tipo', 'credito')
-            ->where('status', 'expirado')
-            ->sum('valor');
-
-        // Total de pontos é o saldo disponível
-        $totalPoints = $activeBalance;
-
         $data = [
-            'total_points' => (string) (int) $totalPoints,
-            'total_earned' => (string) (int) $totalEarned,
-            'total_spent' => (string) (int) $totalSpent,
-            'total_transactions' => $totalTransactions,
-            'active_points' => (string) (int) $activeBalance,
-            'expired_points' => (int) $expiredPoints,
+            'total_points' => (float) $activeBalance,
+            'total_earned' => (float) $totalEarned,
+            'total_spent' => (float) $totalSpent,
+            'total_transactions' => (int) (clone $filteredQuery)->count(),
+            'active_points' => (float) $activeBalance,
+            'expired_points' => (float) (clone $filteredQuery)->where('tipo', 'credito')
+                ->where('status', 'expirado')
+                ->sum('valor'),
         ];
 
         return response()->json([

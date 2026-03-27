@@ -176,6 +176,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('admin/points-extracts/stats', [PointController::class, 'getPointsExtractsStats'])->name('admin.points-extracts.stats');
         // User self-service points balance
         Route::get('user/points/balance', [PointController::class, 'getAuthenticatedUserBalance']);
+        Route::get('user/points/extract', [PointController::class, 'getAuthenticatedUserPointsExtract']);
         Route::post('admin/points-extracts/adjustments', [PointController::class, 'createPointsAdjustment'])->name('admin.points-extracts.adjustments');
         Route::get('admin/points-extracts/{id}', [PointController::class, 'show'])->name('admin.points-extracts.show');
         Route::get('admin/users/{userId}/points-extracts', [PointController::class, 'getUserPointsHistory'])->name('admin.users.points-extracts');
