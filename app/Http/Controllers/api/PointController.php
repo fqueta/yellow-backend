@@ -9,6 +9,7 @@ use App\Services\PermissionService;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
@@ -118,7 +119,7 @@ class PointController extends Controller
         if (!$isUpdate) {
             $validated['tipo'] = $validated['tipo'] ?? 'credito';
             $validated['status'] = $validated['status'] ?? 'ativo';
-            $validated['autor'] = $user->id;
+            $validated['autor'] = $user->id ?? Auth::id();
             $validated['usuario_id'] = $validated['usuario_id'] ?? $user->id;
             $validated['ativo'] = 's';
             $validated['excluido'] = 'n';
@@ -364,25 +365,19 @@ class PointController extends Controller
         // }
         // dd($data);
         if($data['client_id'] == ''){
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => ['client_id' => 'O client_id é obrigatório'],
-            ], 422);
+            throw new \InvalidArgumentException('O client_id é obrigatório');
         }
         $client = User::find($data['client_id']);
         if(!$client){
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => ['client_id' => 'O client_id é inválido'],
-            ], 422);
+            throw new \InvalidArgumentException('O client_id é inválido');
         }
         if($data['valor']==0){
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => ['valor' => 'O valor não pode ser zero'],
-            ], 422);
+            throw new \InvalidArgumentException('O valor não pode ser zero');
         }
         $point->client_id = $data['client_id'];
+        if(!$point->autor && Auth::check()){
+            $point->autor = Auth::id();
+        }
         $point->fill($data);
         $point->save();
         return $point;

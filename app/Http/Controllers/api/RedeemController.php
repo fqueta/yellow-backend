@@ -247,17 +247,10 @@ class RedeemController extends Controller
                 ->orderBy($orderBy, $order)
                 ->where('excluido', 'n');
 
-            //se a permission_id dele form maior ou igual a 5, então é um parceiro e pode ver todos os resgates
-            if((int)$user->permission_id >= 5){
+            //se a permission_id dele form maior ou igual a 5, então é um parceiro e só pode ver os seus próprios resgate
+            //se for administrador (permission_id <= 1), pode ver tudo
+            if((int)$user->permission_id >= 5 && (int)$user->permission_id != 1){
                 $query->where('autor', $user->id);
-                //verificar a string sql completa para debug sem ? na string
-                // dd([
-                //     'sql' => vsprintf(str_replace('?', "'%s'", $query->toSql()), $query->getBindings()),
-                //     'bindings' => $query->getBindings(),
-                //     'query' => $query->get(),
-                //     'count' => $query->count(),
-                // ]);
-                // dd($query->get());
             }
             // Filtros opcionais
             if ($request->filled('status')) {

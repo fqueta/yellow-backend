@@ -255,8 +255,7 @@ class Point extends Model
         // Ao criar, definir autor se não informado como o primeiro usuário com permissão de parceiro
         static::creating(function ($point) {
             if (!$point->autor && Auth::check()) {
-                $permissionId = Qlib::qoption('permission_partner_id') ?? 5;
-                $point->autor = User::where('permission_id', $permissionId)->orderBy('created_at', 'asc')->first()->id;
+                $point->autor = Auth::id();
             }
             if (!$point->usuario_id && Auth::check()) {
                 $point->usuario_id = Auth::id();
