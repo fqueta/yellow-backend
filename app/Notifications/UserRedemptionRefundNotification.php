@@ -41,12 +41,21 @@ class UserRedemptionRefundNotification extends Notification implements ShouldQue
 
     /**
      * Canais de entrega da notificação (Brevo)
+     * Verifica se o destinatário é admin (permission_id=1) e se ele optou por não receber.
      *
      * @param object $notifiable Cliente destinatário
      * @return array<int, string>
      */
     public function via($notifiable)
     {
+        // Verifica se o notifiable é admin e desativou a notificação de extorno
+        if ((int) $notifiable->permission_id === 1) {
+            $prefs = is_array($notifiable->preferencias) ? $notifiable->preferencias : [];
+            $enabled = $prefs['notificacoes']['extorno_resgate'] ?? true;
+            if (!$enabled) {
+                return []; // Não envia nenhuma notificação
+            }
+        }
         return [BrevoChannel::class];
     }
 

@@ -109,6 +109,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('user/can',[UserController::class,'can_access'])->name('perfil.can');
     Route::get('user/profile',[UserController::class,'showProfile'])->name('user.profile.show');
     Route::put('user/profile',[UserController::class,'updateProfile'])->name('user.profile.update');
+    Route::patch('user/preferences',[UserController::class,'updatePreferences'])->name('user.preferences.update');
         Route::put('user/change-password',[UserController::class,'changePassword'])->name('user.change.password');
         Route::post('/logout',[AuthController::class,'logout'])->name('logout');
         // Rota do dashboard

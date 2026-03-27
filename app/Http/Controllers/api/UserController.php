@@ -705,4 +705,49 @@ class UserController extends Controller
             'data' => $data,
         ], 200);
     }
+
+    /**
+     * PT-BR: Atualiza as preferências do usuário autenticado (campo `preferencias` JSON).
+     * Apenas administradores (permission_id = 1) podem usar este endpoint.
+     * EN: Update authenticated admin user's preferences stored in the `preferencias` JSON field.
+     * Only admins (permission_id = 1) are allowed.
+     */
+    public function updatePreferences(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Acesso negado'], 403);
+        }
+        if ((int) $user->permission_id !== 1) {
+            return response()->json(['error' => 'Apenas administradores podem alterar preferências de notificação'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'notificacoes'                 => 'array',
+            'notificacoes.extorno_resgate' => 'boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => 'Dados inválidos', 'messages' => $validator->errors()], 422);
+        }
+
+        $incoming = $validator->validated();
+
+        // Merge com preferências existentes para não sobrescrever outras chaves
+        $existingPrefs = is_array($user->preferencias) ? $user->preferencias : [];
+        if (isset($incoming['notificacoes'])) {
+            $existingPrefs['notificacoes'] = array_merge(
+                $existingPrefs['notificacoes'] ?? [],
+                $incoming['notificacoes']
+            );
+        }
+
+        $user->preferencias = $existingPrefs;
+        $user->save();
+
+        return response()->json([
+            'message'      => 'Preferências atualizadas com sucesso',
+            'preferencias' => $user->preferencias,
+        ], 200);
+    }
 }
