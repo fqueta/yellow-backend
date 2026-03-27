@@ -598,51 +598,30 @@ class PointController extends Controller
 
         $userId = $user->id;
 
-        // Total de pontos ganhos (créditos)
-        $totalEarned = (float) \App\Models\Point::where('client_id', $userId)
-            ->where('tipo', 'credito')
-            ->where('ativo', 's')
+        // Base query para filtros comuns
+        $queryBuilder = \App\Models\Point::where('client_id', $userId)
             ->where('excluido', 'n')
             ->where('deletado', 'n')
-            ->sum('valor');
+            ->where('ativo', 's');
 
-        // Total de pontos gastos (débitos)
-        $totalSpent = (float) \App\Models\Point::where('client_id', $userId)
-            ->where('tipo', 'debito')
-            ->where('ativo', 's')
-            ->where('excluido', 'n')
-            ->where('deletado', 'n')
-            ->sum('valor');
+        // Total de pontos ganhos (créditos histórico, independente de expirado ou não)
+        $totalEarned = (float) (clone $queryBuilder)->where('tipo', 'credito')->sum('valor');
 
-        // Total de transações
-        $totalTransactions = (int) \App\Models\Point::where('client_id', $userId)
-            ->where('ativo', 's')
-            ->where('excluido', 'n')
-            ->where('deletado', 'n')
-            ->count();
+        // Total de pontos gastos (débitos histórico, absoluto para o relatório)
+        $totalSpent = abs((float) (clone $queryBuilder)->where('tipo', 'debito')->sum('valor'));
 
-        // Pontos ativos (créditos não expirados - débitos)
-        $activeBalance = (float) (\App\Models\Point::where('client_id', $userId)
-            ->where('tipo', 'credito')
-            ->where(function ($q) {
-                $q->whereNull('data_expiracao')
-                  ->orWhere('data_expiracao', '>', now());
-            })
-            ->sum('valor')
-        ) - (float) (\App\Models\Point::where('client_id', $userId)
-            ->where('tipo', 'debito')
-            ->sum('valor'));
+        // Total de transações (excluindo removidas)
+        $totalTransactions = (int) (clone $queryBuilder)->count();
 
-        // Pontos expirados (créditos marcados como expirados)
-        $expiredPoints = (float) \App\Models\Point::where('client_id', $userId)
-            ->where('tipo', 'credito')
+        // Saldo disponível usando o método centralizado no Model
+        $activeBalance = \App\Models\Point::saldoCliente($userId);
+
+        // Pontos expirados (créditos com status expirado)
+        $expiredPoints = (float) (clone $queryBuilder)->where('tipo', 'credito')
             ->where('status', 'expirado')
-            ->where('ativo', 's')
-            ->where('excluido', 'n')
-            ->where('deletado', 'n')
             ->sum('valor');
 
-        // Total de pontos (saldo disponível); igualamos ao activeBalance
+        // Total de pontos é o saldo disponível
         $totalPoints = $activeBalance;
 
         $data = [
@@ -728,7 +707,7 @@ class PointController extends Controller
             ],
             'totais' => [
                 'creditos' => $query->clone()->creditos()->sum('valor'),
-                'debitos' => $query->clone()->debitos()->sum('valor'),
+                'debitos' => abs((float) $query->clone()->debitos()->sum('valor')),
                 'movimentacoes' => $query->clone()->count(),
             ],
             'por_status' => [

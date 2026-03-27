@@ -296,7 +296,7 @@ class Point extends Model
                       ->ativos()
                       ->sum('valor');
 
-        return $creditos - $debitos;
+        return (float) $creditos + (float) $debitos;
     }
 
     /**

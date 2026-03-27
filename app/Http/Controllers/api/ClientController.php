@@ -419,6 +419,14 @@ class ClientController extends Controller
         } elseif ($pontos < 0) {
             // Registrar débito de pontos (valores negativos)
             $pc = new PointController();
+            $userPointsBalance = $pc->saldo($client->id);
+            if ($userPointsBalance < abs($pontos)) {
+                return response()->json([
+                    'exec' => false,
+                    'message' => 'Saldo insuficiente para realizar o débito de ' . abs($pontos) . ' pontos. Saldo atual: ' . $userPointsBalance,
+                    'status' => 422,
+                ], 422);
+            }
             $data = [
                 'valor' => $pontos,
                 'tipo' => 'debito',

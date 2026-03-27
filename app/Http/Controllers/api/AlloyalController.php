@@ -251,8 +251,8 @@ class AlloyalController extends Controller
         $pc = new PointController();
         $points = $pc->saldo($client_id);
 
-        if(!empty($points) && $points == null){
-            return ['exec'=>false,'message'=>'Saldo de pontos '.$points.' insuficiente'];
+        if ($points <= 0) {
+            return ['exec'=>false,'message'=>'Saldo de pontos ('.$points.') insuficiente'];
         }
         $multinplicador = Qlib::qoption('factor_point_brl') ? Qlib::qoption('factor_point_brl') : 1;
         $amount = (int)$points * $multinplicador;
