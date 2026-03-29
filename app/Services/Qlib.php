@@ -139,12 +139,22 @@ class Qlib
         //type é o tipo de respsta
 		$ret = false;
 		if($valor){
-			$result = Option::where('url','=',$valor)->
-               where('excluido','=','n')
-               ->where('deletado','=','n')
-               ->where('ativo','=','s')
-               ->select('value')
-               ->first();
+            $query = Option::where('url','=',$valor);
+            try {
+                $conn = (new Option)->getConnectionName();
+                $schema = Schema::connection($conn);
+                if ($schema->hasColumn('options','excluido')) {
+                    $query->where('excluido','=', 'n');
+                }
+                if ($schema->hasColumn('options','deletado')) {
+                    $query->where('deletado','=', 'n');
+                }
+                if ($schema->hasColumn('options','ativo')) {
+                    $query->where('ativo','=', 's');
+                }
+            } catch (\Throwable $e) {
+            }
+            $result = $query->select('value')->first();
             //    ->toArray();
             //    dd($valor,$result['value']);
                if(isset($result['value'])) {

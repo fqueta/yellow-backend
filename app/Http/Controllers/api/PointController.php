@@ -652,10 +652,13 @@ class PointController extends Controller
                 'userId' => (string)$point->client_id,
                 'type' => $typeMapping[$point->tipo] ?? 'adjustment',
                 'points' => (float)$point->valor,
+                'valor_usado' => (float)($point->valor_usado ?? 0),
+                'saldo_restante' => (float)($point->saldo_restante ?? $point->valor),
                 'description' => $point->description,
                 'reference' => $point->pedido_id,
                 'balanceBefore' => (float)$balanceBefore,
                 'balanceAfter' => (float)$balanceAfter,
+                'expirationDate' => $point->data_expiracao ? \Carbon\Carbon::parse($point->data_expiracao)->toISOString() : null,
                 'createdAt' => $point->created_at->toISOString(),
                 'status' => $point->status
             ];
@@ -723,6 +726,18 @@ class PointController extends Controller
         // Saldo disponível (global, não filtrado por data, pois saldo é cumulativo)
         $activeBalance = \App\Models\Point::saldoCliente($userId);
 
+        // Pontos que expiram em breve (próximos 30 dias)
+        $pointsExpiringSoon = \App\Models\Point::where('client_id', $userId)
+            ->where('tipo', 'credito')
+            ->ativos()
+            ->where('status', '!=', 'expirado')
+            ->whereNotNull('data_expiracao')
+            ->whereBetween('data_expiracao', [\Carbon\Carbon::now(), \Carbon\Carbon::now()->addDays(30)])
+            ->get()
+            ->sum(function($p) {
+                return (float) $p->valor - (float) ($p->valor_usado ?? 0);
+            });
+
         $data = [
             'total_points' => (float) $activeBalance,
             'total_earned' => (float) $totalEarned,
@@ -732,6 +747,7 @@ class PointController extends Controller
             'expired_points' => (float) (clone $filteredQuery)->where('tipo', 'credito')
                 ->where('status', 'expirado')
                 ->sum('valor'),
+            'points_expiring_soon' => (float) $pointsExpiringSoon,
         ];
 
         return response()->json([
@@ -746,10 +762,11 @@ class PointController extends Controller
      */
     private function calculateBalanceBefore($transaction)
     {
-        // dd($transaction);
         $previousTransactions = Point::where('client_id', $transaction->client_id)
                                    ->where('created_at', '<', $transaction->created_at)
-                                   ->ativos()
+                                   ->where('excluido', 'n')
+                                   ->where('deletado', 'n')
+                                   ->where('status', '!=', 'cancelado')
                                    ->get();
 
         $balance = 0;
@@ -868,21 +885,26 @@ class PointController extends Controller
         $page = $request->get('page', 1);
         $perPage = $request->get('per_page', 15);
         $search = $request->get('search');
-        $type = $request->get('type'); // credito ou debito
+        $type = $request->get('type'); // credito, debito ou expired
         $userId = $request->get('user_id');
+        $status = $request->get('status'); // ativo, expirado, usado, cancelado
         // Suporte a camelCase e snake_case para datas
         $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
         $dateTo = $request->get('dateTo') ?? $request->get('date_to');
-        // Ordenação: suporta sort=createdAt
+        // Ordenação: suporta sort=createdAt e sort=expirationDate
         $sortParam = $request->get('sort', 'created_at');
-        $sort = $sortParam === 'createdAt' ? 'created_at' : $sortParam;
+        $sortMap = [
+            'createdAt' => 'created_at',
+            'expirationDate' => 'data_expiracao',
+        ];
+        $sort = $sortMap[$sortParam] ?? $sortParam;
         $order = strtolower($request->get('order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         // Validar parâmetros
-        if ($type && !in_array($type, ['credito', 'debito'])) {
+        if ($type && !in_array($type, ['credito', 'debito', 'expired', 'expiracao'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tipo de transação inválido. Use "credito" ou "debito".'
+                'message' => 'Tipo de transação inválido. Use "credito", "debito" ou "expired".'
             ], 400);
         }
 
@@ -906,9 +928,16 @@ class PointController extends Controller
             $query->where('client_id', $userId);
         }
 
-        // Filtro por tipo de transação
-        if ($type) {
+        // Filtro por tipo de transação (suporte a "expired" como tipo especial)
+        if ($type === 'expired' || $type === 'expiracao') {
+            $query->where('status', 'expirado');
+        } elseif ($type) {
             $query->where('tipo', $type);
+        }
+
+        // Filtro por status (ativo, expirado, usado, cancelado)
+        if ($status && in_array($status, ['ativo', 'expirado', 'usado', 'cancelado'])) {
+            $query->where('status', $status);
         }
 
         // Filtro por período
@@ -953,20 +982,39 @@ class PointController extends Controller
             $balanceBefore = $this->calculateBalanceBefore($point);
             $balanceAfter = $this->calculateBalanceAfter($point);
 
+            // Determinar tipo para o frontend
+            $frontendType = 'adjustment';
+            if ($point->status === 'expirado') {
+                $frontendType = 'expired';
+            } elseif ($point->tipo === 'credito') {
+                $frontendType = 'earned';
+            } elseif ($point->tipo === 'debito') {
+                $frontendType = 'redeemed';
+            }
+
+            // Verificar se ponto está expirado mas sem status atualizado
+            $isExpired = $point->status === 'expirado'
+                || ($point->data_expiracao && Carbon::parse($point->data_expiracao)->isPast() && $point->tipo === 'credito');
+            if ($isExpired && $frontendType !== 'expired') {
+                $frontendType = 'expired';
+            }
+
             return [
                 'id' => (string) $point->id,
                 'userId' => (string) $point->client_id,
                 'userName' => $user ? $user->name : 'N/A',
                 'userEmail' => $user ? $user->email : 'N/A',
                 'userCpf' => $user ? $user->cpf : null,
-                'type' => $point->tipo === 'credito' ? 'earned' : 'redeemed',
-                // 'points' => $point->tipo === 'credito' ? (int) $point->valor : -(int) $point->valor,
+                'type' => $frontendType,
                 'points' => $point->valor,
+                'valor_usado' => (float) ($point->valor_usado ?? 0),
+                'saldo_restante' => (float) ($point->saldo_restante ?? $point->valor),
                 'description' => $point->description ?? 'Via API',
                 'reference' => $point->pedido_id ?? $point->origem ?? null,
                 'balanceBefore' => (int) $balanceBefore,
                 'balanceAfter' => (int) $balanceAfter,
                 'expirationDate' => $point->data_expiracao ? Carbon::parse($point->data_expiracao)->toISOString() : null,
+                'status' => $point->status,
                 'createdAt' => Carbon::parse($point->created_at)->toISOString(),
                 'createdBy' => $point->autor ? (string) $point->autor : null
             ];
@@ -1049,15 +1097,15 @@ class PointController extends Controller
 
         try {
             // Ler e normalizar filtros de entrada
-            $type = $request->get('type'); // "credito" ou "debito"
+            $type = $request->get('type'); // "credito", "debito" ou "expired"
             $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
             $dateTo   = $request->get('dateTo')   ?? $request->get('date_to');
 
             // Validar tipo quando informado
-            if ($type && !in_array($type, ['credito', 'debito'])) {
+            if ($type && !in_array($type, ['credito', 'debito', 'expired', 'expiracao'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Parâmetro "type" inválido. Use "credito" ou "debito".'
+                    'message' => 'Parâmetro "type" inválido. Use "credito", "debito" ou "expired".'
                 ], 422);
             }
 
@@ -1077,9 +1125,15 @@ class PointController extends Controller
                 $baseQuery->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
             }
 
+            // Se filtro por expired, aplicar na query base
+            $isExpiredFilter = ($type === 'expired' || $type === 'expiracao');
+            if ($isExpiredFilter) {
+                $baseQuery->where('status', 'expirado');
+            }
+
             // Total de transações (respeita filtro de tipo quando fornecido)
             $transactionsQuery = clone $baseQuery;
-            if ($type) {
+            if ($type && !$isExpiredFilter) {
                 $transactionsQuery->where('tipo', $type);
             }
             $totalTransactions = (int) $transactionsQuery->count();
@@ -1089,13 +1143,15 @@ class PointController extends Controller
                 $totalEarned = 0; // escopo filtrado por débito
             } else {
                 $earnedQuery = clone $baseQuery;
-                $earnedQuery->where('tipo', 'credito');
+                if (!$isExpiredFilter) {
+                    $earnedQuery->where('tipo', 'credito');
+                }
                 $totalEarned = (int) $earnedQuery->sum('valor');
             }
 
             // Total de pontos resgatados (débito)
-            if ($type === 'credito') {
-                $totalRedeemed = 0; // escopo filtrado por crédito
+            if ($type === 'credito' || $isExpiredFilter) {
+                $totalRedeemed = 0; // escopo filtrado por crédito ou expirados
             } else {
                 $redeemedQuery = clone $baseQuery;
                 $redeemedQuery->where('tipo', 'debito');
@@ -1105,6 +1161,9 @@ class PointController extends Controller
             // Total de pontos expirados (apenas créditos)
             if ($type === 'debito') {
                 $totalExpired = 0; // não há expiração para débitos
+            } elseif ($isExpiredFilter) {
+                // Já está filtrado por expirados
+                $totalExpired = (int) (clone $baseQuery)->sum('valor');
             } else {
                 $expiredQuery = clone $baseQuery;
                 $expiredQuery->where('tipo', 'credito')
@@ -1114,7 +1173,7 @@ class PointController extends Controller
 
             // Usuários ativos (com pelo menos uma transação no escopo)
             $activeUsersQuery = clone $baseQuery;
-            if ($type) {
+            if ($type && !$isExpiredFilter) {
                 $activeUsersQuery->where('tipo', $type);
             }
             $activeUsers = (int) $activeUsersQuery->distinct('client_id')->count('client_id');

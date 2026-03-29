@@ -9,6 +9,7 @@ use App\Services\Qlib;
 use App\Notifications\PointsExpiredNotification;
 use Illuminate\Console\Command;
 use Stancl\Tenancy\Tenancy;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Comando Artisan para expirar pontos vencidos em lote.
@@ -27,17 +28,6 @@ class ExpirePoints extends Command
     public function handle()
     {
         $this->info('Iniciando expiração de pontos...');
-
-        $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
-        if ($expiracaoAtiva !== 's') {
-            $this->warn('Funcionalidade de expiração de pontos desativada globalmente. Ignorando rotina.');
-            SystemLog::create([
-                'event_type' => 'point_expiration_skipped',
-                'status' => 'info',
-                'description' => "A rotina de expiração de pontos foi ignorada pois a funcionalidade está desativida nas configurações.",
-            ]);
-            return 0;
-        }
 
         $totalExpirados = 0;
 
@@ -78,14 +68,19 @@ class ExpirePoints extends Command
                 $this->notifyAdmins($count, null);
             }
 
-            SystemLog::create([
-                'event_type' => 'point_expiration_daily',
-                'status' => 'success',
-                'description' => "Rotina diária de expiração de pontos concluída.",
-                'metadata' => [
-                    'total_expired' => $count
-                ],
-            ]);
+            try {
+                if (Schema::hasTable('system_logs')) {
+                    SystemLog::create([
+                        'event_type' => 'point_expiration_daily',
+                        'status' => 'success',
+                        'description' => "Rotina diária de expiração de pontos concluída.",
+                        'metadata' => [
+                            'total_expired' => $count
+                        ],
+                    ]);
+                }
+            } catch (\Throwable $e) {
+            }
         }
 
         $this->info("Concluído! Total de pontos expirados: {$totalExpirados}");
@@ -140,13 +135,64 @@ class ExpirePoints extends Command
      */
     private function expirePointsForCurrentContext(): int
     {
-        return Point::where('tipo', 'credito')
+        $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
+        if ($expiracaoAtiva !== 's') {
+            $this->warn('  Expiração de pontos desativada para este tenant. Ignorando.');
+            try {
+                if (Schema::hasTable('system_logs')) {
+                    SystemLog::create([
+                        'event_type' => 'point_expiration_skipped',
+                        'status' => 'info',
+                        'description' => "A rotina de expiração de pontos foi ignorada pois a funcionalidade está desativida nas configurações do tenant.",
+                    ]);
+                }
+            } catch (\Throwable $e) {
+            }
+            return 0;
+        }
+
+        // Buscar créditos ativos vencidos que ainda possuem saldo (valor > valor_usado)
+        $pontosParaExpirar = Point::where('tipo', 'credito')
             ->where('status', 'ativo')
             ->where('ativo', 's')
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->whereNotNull('data_expiracao')
             ->where('data_expiracao', '<', now()->toDateString())
-            ->update(['status' => 'expirado']);
+            ->get();
+
+        $count = 0;
+
+        foreach ($pontosParaExpirar as $ponto) {
+            $saldoRestante = (float) $ponto->valor - (float) $ponto->valor_usado;
+
+            if ($saldoRestante > 0) {
+                // Criar um DÉBITO de expiração para registrar no extrato e baixar o saldo total
+                Point::create([
+                    'client_id' => $ponto->client_id,
+                    'valor' => -$saldoRestante,
+                    'tipo' => 'debito',
+                    'origem' => 'expiracao',
+                    'status' => 'finalizado',
+                    'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
+                    'data' => now()->toDateString(),
+                    'config' => [
+                        'referencia_credito_id' => $ponto->id,
+                        'valor_original_credito' => $ponto->valor,
+                        'valor_expirado' => $saldoRestante
+                    ]
+                ]);
+            }
+
+            // Marcar o crédito original como expirado e zerar o saldo "disponível" dele
+            $ponto->update([
+                'status' => 'expirado',
+                'valor_usado' => $ponto->valor // Marcar como totalmente usado para não contar mais em saldos manuais
+            ]);
+
+            $count++;
+        }
+
+        return $count;
     }
 }

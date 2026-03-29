@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
@@ -35,7 +36,7 @@ class Point extends Model
         'origem',
         'valor_referencia',
         'data_expiracao',
-        'status',
+        'valor_usado',
         'usuario_id',
         'pedido_id',
         'config',
@@ -201,6 +202,24 @@ class Point extends Model
     }
 
     /**
+     * Accessor para saldo restante do crédito
+     */
+    public function getSaldoRestanteAttribute(): float
+    {
+        if ($this->tipo !== 'credito') return 0;
+        return max(0, (float) $this->valor - (float) $this->valor_usado);
+    }
+
+    /**
+     * Verifica se o crédito já foi totalmente consumido
+     */
+    public function getIsTotalmenteUsadoAttribute(): bool
+    {
+        if ($this->tipo !== 'credito') return true;
+        return $this->valor_usado >= $this->valor;
+    }
+
+    /**
      * Mutator para converter valor para negativo quando for débito
      */
     public function setValorAttribute($value)
@@ -273,6 +292,13 @@ class Point extends Model
                 }
             }
         });
+
+        // Ao criar um DÉBITO, consumir os créditos automaticamente (Lógica PEPS)
+        static::created(function ($point) {
+            if ($point->tipo === 'debito') {
+                self::consumePoints($point->client_id, abs($point->valor));
+            }
+        });
     }
 
     /**
@@ -281,21 +307,71 @@ class Point extends Model
      */
     public static function saldoCliente($clienteId): float
     {
+        // 1. Calcula a soma matemática efetiva validada do histórico de toda a vida do cliente
+        $mathSum = (float) self::where('client_id', $clienteId)
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->where('status', '!=', 'cancelado')
+            ->sum(DB::raw("CASE WHEN tipo = 'credito' THEN valor ELSE -ABS(valor) END"));
+
+        // 2. Desconta os créditos ativos dinamicamente vencidos caso a rotina Cron ainda não os tenha processado (expiracao < hoje)
+        $dynamicExpiredUnprocessed = (float) self::where('client_id', $clienteId)
+            ->where('tipo', 'credito')
+            ->where('status', 'ativo')
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->whereNotNull('data_expiracao')
+            ->where('data_expiracao', '<', now()->toDateString())
+            ->sum(DB::raw('valor - valor_usado'));
+
+        // Saldo real é a vida menos as expirações dinâmicas ocorridas antes do cronJob.
+        return $mathSum - $dynamicExpiredUnprocessed;
+    }
+
+    /**
+     * Consome os pontos de crédito mais antigos do cliente.
+     * Implementa a lógica PEPS (Primeiro que Entra, Primeiro que Sai).
+     * 
+     * @param int $clienteId
+     * @param float $amount Valor total a ser debitado (será tratado como positivo)
+     * @return float Valor que não pôde ser consumido por falta de saldo
+     */
+    public static function consumePoints($clienteId, $amount): float
+    {
+        $remainingToConsume = abs((float) $amount);
+        if ($remainingToConsume <= 0) return 0;
+
+        // Buscar créditos ativos que ainda possuem saldo disponível
+        // Ordenação: 1. Data de expiração mais próxima, 2. Data de lançamento, 3. ID (garante ordem determinística)
         $creditos = self::where('client_id', $clienteId)
-                       ->where('tipo', 'credito')
-                       ->ativos()
-                       ->where(function ($q) {
-                           $q->whereNull('data_expiracao')
-                             ->orWhere('data_expiracao', '>', now());
-                       })
-                       ->sum('valor');
+            ->where('tipo', 'credito')
+            ->ativos()
+            ->where(function ($q) {
+                // Apenas créditos que NÃO expiraram ainda
+                $q->whereNull('data_expiracao')
+                  ->orWhere('data_expiracao', '>', now());
+            })
+            ->whereRaw('valor > valor_usado')
+            ->orderByRaw('data_expiracao IS NULL, data_expiracao ASC')
+            ->orderBy('data', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
 
-        $debitos = self::where('client_id', $clienteId)
-                      ->where('tipo', 'debito')
-                      ->ativos()
-                      ->sum('valor');
+        foreach ($creditos as $credito) {
+            /** @var Point $credito */
+            if ($remainingToConsume <= 0.001) break; // Float safety
 
-        return (float) $creditos + (float) $debitos;
+            $availableInThisCredit = (float) $credito->valor - (float) $credito->valor_usado;
+            $consumption = min($availableInThisCredit, $remainingToConsume);
+
+            $credito->valor_usado = (float) $credito->valor_usado + $consumption;
+            $credito->save();
+
+            $remainingToConsume -= $consumption;
+        }
+
+        return round($remainingToConsume, 2);
     }
 
     /**
