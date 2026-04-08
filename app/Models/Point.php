@@ -293,9 +293,10 @@ class Point extends Model
             }
         });
 
-        // Ao criar um DÉBITO, consumir os créditos automaticamente (Lógica PEPS)
+        // Ao criar um DÉBITO normal, consumir os créditos automaticamente (Lógica PEPS)
+        // Ignorar débitos de expiração, pois a própria rotina de expiração já atualiza o valor_usado do crédito matriz.
         static::created(function ($point) {
-            if ($point->tipo === 'debito') {
+            if ($point->tipo === 'debito' && $point->origem !== 'expiracao') {
                 self::consumePoints($point->client_id, abs($point->valor));
             }
         });
@@ -322,7 +323,7 @@ class Point extends Model
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->whereNotNull('data_expiracao')
-            ->where('data_expiracao', '<', now()->toDateString())
+            ->where('data_expiracao', '<=', now()->toDateString())
             ->sum(DB::raw('valor - valor_usado'));
 
         // Saldo real é a vida menos as expirações dinâmicas ocorridas antes do cronJob.

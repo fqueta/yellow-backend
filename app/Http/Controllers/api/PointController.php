@@ -587,6 +587,13 @@ class PointController extends Controller
     public function getAuthenticatedUserPointsExtract(\Illuminate\Http\Request $request)
     {
         $user = $request->user();
+        
+        // Permite que administradores assumam a visão de um cliente
+        if ($user && isset($user->permission_id) && isset($this->partner_id) && $user->permission_id < $this->partner_id && $request->filled('admin_client_id')) {
+            $overriddenUser = \App\Models\User::find($request->admin_client_id);
+            if ($overriddenUser) $user = $overriddenUser;
+        }
+
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'Acesso negado'], 403);
         }
@@ -608,8 +615,14 @@ class PointController extends Controller
             ->where('ativo', 's');
 
         // Aplicar filtros
-        if ($type && in_array($type, ['credito', 'debito'])) {
-            $queryBuilder->where('tipo', $type);
+        if ($type) {
+            if ($type === 'credito') {
+                $queryBuilder->where('tipo', 'credito');
+            } elseif ($type === 'debito') {
+                $queryBuilder->where('tipo', 'debito')->where('origem', '!=', 'expiracao');
+            } elseif ($type === 'expired' || $type === 'expiracao') {
+                $queryBuilder->where('origem', 'expiracao');
+            }
         }
 
         if ($dateFrom) {
@@ -647,10 +660,18 @@ class PointController extends Controller
             $balanceBefore = $this->calculateBalanceBefore($point);
             $balanceAfter = $this->calculateBalanceAfter($point);
 
+            // Determinar o tipo mais específico baseado na origem, recaindo no tipo geral
+            $resolvedType = 'adjustment';
+            if (!empty($point->origem) && isset($typeMapping[$point->origem])) {
+                $resolvedType = $typeMapping[$point->origem];
+            } else if (isset($typeMapping[$point->tipo])) {
+                $resolvedType = $typeMapping[$point->tipo];
+            }
+
             return [
                 'id' => (string)$point->id,
                 'userId' => (string)$point->client_id,
-                'type' => $typeMapping[$point->tipo] ?? 'adjustment',
+                'type' => $resolvedType,
                 'points' => (float)$point->valor,
                 'valor_usado' => (float)($point->valor_usado ?? 0),
                 'saldo_restante' => (float)($point->saldo_restante ?? $point->valor),
@@ -683,6 +704,13 @@ class PointController extends Controller
     public function getAuthenticatedUserBalance(\Illuminate\Http\Request $request)
     {
         $user = $request->user();
+
+        // Permite que administradores assumam a visão de um cliente
+        if ($user && isset($user->permission_id) && isset($this->partner_id) && $user->permission_id < $this->partner_id && $request->filled('admin_client_id')) {
+            $overriddenUser = \App\Models\User::find($request->admin_client_id);
+            if ($overriddenUser) $user = $overriddenUser;
+        }
+
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'Acesso negado'], 403);
         }
@@ -1096,10 +1124,11 @@ class PointController extends Controller
         $user = $request->user();
 
         try {
-            // Ler e normalizar filtros de entrada
+            // Total de transações (respeita filtro de tipo quando fornecido)
             $type = $request->get('type'); // "credito", "debito" ou "expired"
             $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
             $dateTo   = $request->get('dateTo')   ?? $request->get('date_to');
+            $search   = $request->get('search');
 
             // Validar tipo quando informado
             if ($type && !in_array($type, ['credito', 'debito', 'expired', 'expiracao'])) {
@@ -1123,6 +1152,20 @@ class PointController extends Controller
             }
             if ($dateTo) {
                 $baseQuery->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            }
+
+            // Aplica filtro de pesquisa se houver
+            if ($search) {
+                $baseQuery->where(function($q) use ($search) {
+                    $q->where('id', 'like', "%{$search}%")
+                      ->orWhere('description', 'like', "%{$search}%")
+                      ->orWhere('origem', 'like', "%{$search}%")
+                      ->orWhere('pedido_id', 'like', "%{$search}%")
+                      ->orWhereHas('cliente', function($clienteQuery) use ($search) {
+                          $clienteQuery->where('name', 'like', "%{$search}%")
+                                      ->orWhere('email', 'like', "%{$search}%");
+                      });
+                });
             }
 
             // Se filtro por expired, aplicar na query base
@@ -1178,6 +1221,13 @@ class PointController extends Controller
             }
             $activeUsers = (int) $activeUsersQuery->distinct('client_id')->count('client_id');
 
+            // Saldo matemático total gerado pelos itens atuais listados
+            $balanceQuery = clone $baseQuery;
+            if ($type && !$isExpiredFilter) {
+                $balanceQuery->where('tipo', $type);
+            }
+            $totalBalance = (float) $balanceQuery->sum(\Illuminate\Support\Facades\DB::raw("CASE WHEN tipo = 'credito' THEN valor ELSE -ABS(valor) END"));
+
             // Total de ajustes (origem/descrição sugerindo ajuste)
             $adjustmentsQuery = clone $baseQuery;
             $adjustmentsQuery->where(function ($q) {
@@ -1210,6 +1260,7 @@ class PointController extends Controller
                 'totalRedeemed' => $totalRedeemed,
                 'totalExpired' => $totalExpired,
                 'activeUsers' => $activeUsers,
+                'totalBalance' => $totalBalance,
                 'totalAdjustments' => $totalAdjustments,
                 'totalRefunds' => $totalRefunds,
                 'filters' => [

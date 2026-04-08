@@ -158,7 +158,7 @@ class ExpirePoints extends Command
             ->where('excluido', 'n')
             ->where('deletado', 'n')
             ->whereNotNull('data_expiracao')
-            ->where('data_expiracao', '<', now()->toDateString())
+            ->where('data_expiracao', '<=', now()->toDateString())
             ->get();
 
         $count = 0;
@@ -174,7 +174,7 @@ class ExpirePoints extends Command
                     'tipo' => 'debito',
                     'origem' => 'expiracao',
                     'status' => 'finalizado',
-                    'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
+                    'description' => "Expiração de pontos (Recebidos em " . $ponto->data->format('d/m/Y') . ")",
                     'data' => now()->toDateString(),
                     'config' => [
                         'referencia_credito_id' => $ponto->id,
