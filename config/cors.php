@@ -22,6 +22,8 @@ return [
         'http://127.0.0.1:2000', // Frontend Vite (Novo)
     ],
     'allowed_origins_patterns' => [
+        '#^https?://.*\.maisaqui\.com\.br$#',
+        '#^https?://.*\.yellowbc\.com\.br$#',
         '#^http://.*\.localhost(:[0-9]+)?$#', // Regex válida para subdomínios locais
     ],
     'allowed_headers' => ['*', 'x-form-token'],
