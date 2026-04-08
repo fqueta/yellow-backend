@@ -8,6 +8,10 @@ return [
         'https://clubeyellow.maisaqui.com.br',
         'https://api-cl.yellowbc.com.br',
         'https://cl.yellowbc.com.br',
+        'https://api-cldev2.maisaqui.com.br',
+        'https://cldev2.maisaqui.com.br',
+        'https://api-cldev.maisaqui.com.br',
+        'https://cldev.maisaqui.com.br',
         'http://localhost:8080', // Para desenvolvimento
         'http://127.0.0.1:8080', // Para desenvolvimento
         'http://yellow-dev.localhost:8080', // Para frontend local
