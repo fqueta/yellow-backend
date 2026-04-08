@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\DynamicCors;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ValidatePublicFormToken;
@@ -7,7 +8,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
-use Illuminate\Http\Middleware\HandleCors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,8 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        // CORS deve ser o primeiro middleware
-        $middleware->prepend(HandleCors::class);
+        // Usar novo CORS Dinâmico para resolver problemas de Tenant/Produção
+        $middleware->prepend(DynamicCors::class);
 
         $middleware->web(append: [
             HandleAppearance::class,
@@ -33,7 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Aplicar CORS também para API
         $middleware->api(prepend: [
-            HandleCors::class,
+            DynamicCors::class,
         ]);
         
         // Registrar middlewares personalizados
