@@ -12,6 +12,7 @@ return [
         'https://cldev2.maisaqui.com.br',
         'https://api-cldev.maisaqui.com.br',
         'https://cldev.maisaqui.com.br',
+        'http://cldev2.maisaqui.com.br',
         'http://localhost:8080', // Para desenvolvimento
         'http://127.0.0.1:8080', // Para desenvolvimento
         'http://yellow-dev.localhost:8080', // Para frontend local
@@ -21,11 +22,7 @@ return [
         'http://localhost:2000', // Frontend Vite (Novo)
         'http://127.0.0.1:2000', // Frontend Vite (Novo)
     ],
-    'allowed_origins_patterns' => [
-        '#^https?://.*\.maisaqui\.com\.br$#',
-        '#^https?://.*\.yellowbc\.com\.br$#',
-        '#^http://.*\.localhost(:[0-9]+)?$#', // Regex válida para subdomínios locais
-    ],
+    'allowed_origins_patterns' => [],
     'allowed_headers' => ['*', 'x-form-token'],
     'exposed_headers' => [],
     'max_age' => 0,
