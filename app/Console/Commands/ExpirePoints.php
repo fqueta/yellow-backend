@@ -176,6 +176,7 @@ class ExpirePoints extends Command
                     'status' => 'finalizado',
                     'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
                     'data' => now()->toDateString(),
+                    'data_expiracao' => $ponto->data_expiracao, // Copia para fins de histórico e exibição no extrato
                     'config' => [
                         'referencia_credito_id' => $ponto->id,
                         'valor_original_credito' => $ponto->valor,

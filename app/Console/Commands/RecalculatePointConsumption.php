@@ -38,28 +38,37 @@ class RecalculatePointConsumption extends Command
     private function recalculateForCurrentContext()
     {
         $clientIds = \App\Models\Point::distinct()->pluck('client_id');
+        $totalClients = $clientIds->count();
+        $processed = 0;
 
         foreach ($clientIds as $clientId) {
+            $processed++;
+
             // 1. Resetar valor_usado para todos os créditos deste cliente
             \App\Models\Point::where('client_id', $clientId)
                 ->where('tipo', 'credito')
                 ->update(['valor_usado' => 0]);
 
             // 2. Buscar TODOS os débitos do cliente em ordem cronológica
+            // Inclui tipo 'debito' (resgates) E tipo 'expired' (expirações)
+            // NÃO usa o scope ativos() pois registros de expiração têm status='finalizado'
             $debitos = \App\Models\Point::where('client_id', $clientId)
-                ->where('tipo', 'debito')
-                ->ativos()
+                ->whereIn('tipo', ['debito', 'expired'])
+                ->where('status', '!=', 'cancelado')
+                ->where('excluido', 'n')
+                ->where('deletado', 'n')
                 ->orderBy('data', 'asc')
+                ->orderBy('created_at', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
 
             if ($debitos->isEmpty()) continue;
 
-            $this->line("  Processando " . $debitos->count() . " débitos para o cliente #{$clientId}...");
+            $this->line("  [{$processed}/{$totalClients}] Recalculando " . $debitos->count() . " débitos para o cliente #{$clientId}...");
 
             foreach ($debitos as $debito) {
-                // Notar que Point::consumePoints já cuida de encontrar os créditos certos
-                \App\Models\Point::consumePoints($clientId, $debito->valor);
+                // Usa o método de recálculo histórico que ignora filtros de data de expiração
+                \App\Models\Point::consumePointsForRecalculation($clientId, abs($debito->valor));
             }
         }
     }

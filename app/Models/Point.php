@@ -403,6 +403,49 @@ class Point extends Model
     }
 
     /**
+     * Versão especial do consumePoints para recálculo histórico.
+     * NÃO filtra por data de expiração, pois precisamos reconstruir
+     * o estado passado, quando os créditos ainda eram válidos.
+     *
+     * @param int $clienteId
+     * @param float $amount Valor a ser debitado
+     * @return void
+     */
+    public static function consumePointsForRecalculation($clienteId, $amount): void
+    {
+        $remainingToConsume = abs((float) $amount);
+        if ($remainingToConsume <= 0) return;
+
+        // Busca TODOS os créditos com saldo disponível, incluindo os já expirados
+        // pois no passado eles podiam ser usados
+        $creditos = self::where('client_id', $clienteId)
+            ->where('tipo', 'credito')
+            ->where('ativo', 's')
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->where('status', '!=', 'cancelado')
+            ->whereRaw('valor > valor_usado')
+            ->orderByRaw('data_expiracao IS NULL, data_expiracao ASC')
+            ->orderBy('data', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        foreach ($creditos as $credito) {
+            if ($remainingToConsume <= 0.001) break;
+
+            $availableInThisCredit = (float) $credito->valor - (float) $credito->valor_usado;
+            $consumption = min($availableInThisCredit, $remainingToConsume);
+
+            // Usar DB::table para evitar disparar eventos do Eloquent (performance e segurança)
+            \Illuminate\Support\Facades\DB::table('points')
+                ->where('id', $credito->id)
+                ->update(['valor_usado' => (float) $credito->valor_usado + $consumption]);
+
+            $remainingToConsume -= $consumption;
+        }
+    }
+
+    /**
      * Método estático para pontos que expiram em breve
      */
     public static function pontosVencendoCliente($clienteId, $dias = 30): float

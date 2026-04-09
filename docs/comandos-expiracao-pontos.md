@@ -160,3 +160,74 @@ Verifique se:
 - O canal Brevo está configurado corretamente
 - Os usuários com `permission_id = 1` existem e têm email válido
 - O modelo User está disponível no contexto atual
+
+---
+
+## ⚠️ Guia de Deploy em Produção (Atualização PEPS)
+
+> **ATENÇÃO**: Após o deploy da atualização que introduziu o rastreamento PEPS de consumo de créditos
+> (`valor_usado` nos créditos), é **obrigatório** executar o processo de normalização abaixo.
+> Executar apenas `points:expire` sem essa normalização irá gerar registros de expiração **incorretos**
+> (com valores maiores do que o real, pois o sistema vai ignorar resgates já feitos anteriormente).
+
+### Por que isso é necessário?
+
+**Antes da atualização:** Os resgates criavam apenas um registro de débito, mas **não atualizavam** o campo `valor_usado` nos créditos correspondentes.
+
+**Depois da atualização:** O sistema passou a rastrear exatamente quais créditos foram consumidos (lógica PEPS completa), atualizando `valor_usado` em tempo real.
+
+Resultado: os créditos antigos têm `valor_usado = 0`, então o sistema de expiração acredita que 100% do crédito ainda está disponível, mesmo que já tenha sido gasto.
+
+### Sequência obrigatória no servidor de produção
+
+Execute os comandos **nesta ordem exata**, via SSH:
+
+```bash
+# 1. Entrar no diretório do projeto
+cd /caminho/para/yellow-backend
+
+# 2. Baixar o código mais recente
+git pull
+
+# 3. Limpar caches
+php artisan config:clear
+php artisan cache:clear
+
+# 4. Aplicar a migration que altera a coluna 'tipo' de ENUM para STRING
+php artisan tenants:migrate
+
+# 5. Normalizar os dados históricos (pode demorar alguns minutos)
+#    Este script:
+#    - Remove expirações lançadas incorretamente
+#    - Recalcula valor_usado de todos os créditos via PEPS histórico
+#    - Marca créditos vencidos corretamente
+php scripts/normalize_points.php
+
+# 6. Criar os registros de expiração corretos com base nos saldos reais
+php artisan points:expire
+```
+
+### O que o script `normalize_points.php` faz
+
+| Passo | Ação |
+|-------|------|
+| 1 | Remove registros de expiração existentes (podem estar errados) |
+| 2 | Zera `valor_usado` em todos os créditos para recalcular do zero |
+| 3 | Percorre todos os débitos históricos em ordem cronológica e aplica o PEPS |
+| 4 | Marca créditos vencidos com `status = expirado` e `valor_usado = valor` |
+
+> **Segurança:** Todo o processo roda dentro de uma transação de banco de dados.
+> Se qualquer passo falhar, os dados voltam ao estado original automaticamente.
+
+### Tempo estimado
+
+- Depende do número de clientes e transações
+- Para ~1.900 clientes com ~3.000 transações: aproximadamente **2 minutos**
+- Para bases maiores, planeje uma janela de manutenção
+
+### Verificação pós-deploy
+
+Após executar todos os passos, verifique:
+1. Nenhum cliente deve ter saldo muito negativo sem justificativa
+2. Os registros de expiração devem mostrar apenas o saldo **real** que expirou (não o valor total do crédito quando já havia sido parcialmente gasto)
+3. A coluna "Saldo Disp." nos extratos deve refletir o uso real dos créditos

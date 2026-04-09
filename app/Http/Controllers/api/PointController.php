@@ -1012,12 +1012,16 @@ class PointController extends Controller
 
             // Determinar tipo para o frontend
             $frontendType = 'adjustment';
-            if ($point->status === 'expirado') {
+            if ($point->tipo === 'expired' || $point->status === 'expirado') {
                 $frontendType = 'expired';
             } elseif ($point->tipo === 'credito') {
                 $frontendType = 'earned';
             } elseif ($point->tipo === 'debito') {
                 $frontendType = 'redeemed';
+            } elseif ($point->tipo === 'bonus') {
+                $frontendType = 'bonus';
+            } elseif ($point->tipo === 'refund' || $point->tipo === 'reembolso') {
+                $frontendType = 'refund';
             }
 
             // Verificar se ponto está expirado mas sem status atualizado
