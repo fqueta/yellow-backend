@@ -171,10 +171,10 @@ class ExpirePoints extends Command
                 Point::create([
                     'client_id' => $ponto->client_id,
                     'valor' => -$saldoRestante,
-                    'tipo' => 'debito',
+                    'tipo' => 'expired',
                     'origem' => 'expiracao',
                     'status' => 'finalizado',
-                    'description' => "Expiração de pontos (Recebidos em " . $ponto->data->format('d/m/Y') . ")",
+                    'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
                     'data' => now()->toDateString(),
                     'config' => [
                         'referencia_credito_id' => $ponto->id,

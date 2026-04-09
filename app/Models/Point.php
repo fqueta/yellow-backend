@@ -56,6 +56,17 @@ class Point extends Model
     ];
 
     /**
+     * Atributos que devem ser anexados ao JSON
+     */
+    protected $appends = [
+        'saldo_restante',
+        'is_totalmente_usado',
+        'proximo_vencimento',
+        'expirado',
+        'valor_formatado',
+    ];
+
+    /**
      * Casting de tipos
      */
     protected $casts = [
@@ -226,8 +237,8 @@ class Point extends Model
     {
         $valor = floatval($value);
 
-        // Se o tipo for débito, garantir que o valor seja negativo
-        if (isset($this->attributes['tipo']) && $this->attributes['tipo'] === 'debito') {
+        // Se o tipo for débito ou expiração, garantir que o valor seja negativo
+        if (isset($this->attributes['tipo']) && in_array($this->attributes['tipo'], ['debito', 'expired'])) {
             $this->attributes['valor'] = -abs($valor);
         } else {
             $this->attributes['valor'] = $valor;
@@ -297,7 +308,21 @@ class Point extends Model
         // Ignorar débitos de expiração, pois a própria rotina de expiração já atualiza o valor_usado do crédito matriz.
         static::created(function ($point) {
             if ($point->tipo === 'debito' && $point->origem !== 'expiracao') {
-                self::consumePoints($point->client_id, abs($point->valor));
+                $consumedIds = self::consumePoints($point->client_id, abs($point->valor));
+                
+                // Se consumiu créditos, atualizar a descrição para incluir as referências
+                if (!empty($consumedIds)) {
+                    $idsStr = implode(', #', $consumedIds);
+                    $newDescription = $point->description . " (Créditos: #$idsStr)";
+                    
+                    // Usar DB::table para evitar disparar eventos do Eloquent novamente (o que causaria loop infinito)
+                    DB::table('points')->where('id', $point->id)->update([
+                        'description' => $newDescription,
+                        'config' => json_encode(array_merge(is_array($point->config) ? $point->config : [], [
+                            'consumed_credit_ids' => $consumedIds
+                        ]))
+                    ]);
+                }
             }
         });
     }
@@ -336,12 +361,13 @@ class Point extends Model
      * 
      * @param int $clienteId
      * @param float $amount Valor total a ser debitado (será tratado como positivo)
-     * @return float Valor que não pôde ser consumido por falta de saldo
+     * @return array IDs dos créditos que foram consumidos
      */
-    public static function consumePoints($clienteId, $amount): float
+    public static function consumePoints($clienteId, $amount): array
     {
         $remainingToConsume = abs((float) $amount);
-        if ($remainingToConsume <= 0) return 0;
+        $consumedIds = [];
+        if ($remainingToConsume <= 0) return [];
 
         // Buscar créditos ativos que ainda possuem saldo disponível
         // Ordenação: 1. Data de expiração mais próxima, 2. Data de lançamento, 3. ID (garante ordem determinística)
@@ -369,10 +395,11 @@ class Point extends Model
             $credito->valor_usado = (float) $credito->valor_usado + $consumption;
             $credito->save();
 
+            $consumedIds[] = $credito->id;
             $remainingToConsume -= $consumption;
         }
 
-        return round($remainingToConsume, 2);
+        return $consumedIds;
     }
 
     /**
