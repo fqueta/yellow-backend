@@ -399,6 +399,14 @@ class PointController extends Controller
      */
     public function show(Request $request, string $id)
     {
+        $user = $request->user();
+        
+        // Permite que administradores assumam a visão de um cliente (nível 5 ou menor)
+        if ($user && isset($user->permission_id) && isset($this->partner_id) && $user->permission_id <= $this->partner_id && $request->filled('admin_client_id')) {
+            $overriddenUser = \App\Models\User::find($request->admin_client_id);
+            if ($overriddenUser) $user = $overriddenUser;
+        }
+
         $permissionCheck = $this->checkUserPermission('view');
         if (!$permissionCheck['success']) {
             return $permissionCheck['response'];
