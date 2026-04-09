@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use function PHPUnit\Framework\isArray;
+
 use App\Http\Controllers\api\PointController;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -1047,7 +1047,7 @@ class ClientController extends Controller
         // Tratar config se fornecido
         if (isset($clientData['config'])) {
             $clientData['config'] = $this->sanitizeInput($clientData['config']);
-            if (isArray($clientData['config'])) {
+            if (is_array($clientData['config'])) {
                 $clientData['config'] = json_encode($clientData['config']);
             }
         }
