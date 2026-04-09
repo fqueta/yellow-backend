@@ -955,8 +955,8 @@ class PointController extends Controller
         $query = Point::query();
         //desconsidera pontos com excluido=s
         $query->where('excluido', '!=', 's');
-        //caso seja um usuario com permissão maior ou igua 5 listar apenas pontos em que autor = autor_id
-        if ($user->permission_id >= $this->partner_id) {
+        //caso seja um usuario com permissão maior que 5 (parceiros ou menores) listar apenas pontos em que autor = autor_id
+        if ($user->permission_id > $this->partner_id) {
             $query->where('autor', $user->id);
         }
         // Filtro por usuário específico
@@ -966,7 +966,10 @@ class PointController extends Controller
 
         // Filtro por tipo de transação (suporte a "expired" como tipo especial)
         if ($type === 'expired' || $type === 'expiracao') {
-            $query->where('status', 'expirado');
+            $query->where(function($q) {
+                $q->where('tipo', 'expired')
+                  ->orWhere('status', 'expirado');
+            });
         } elseif ($type) {
             $query->where('tipo', $type);
         }
@@ -1154,8 +1157,9 @@ class PointController extends Controller
             $baseQuery = Point::query()
                 ->where('excluido', '!=', 's');
 
-            if ($user && $user->permission_id >= $this->partner_id) {
-                $baseQuery->where('usuario_id', $user->id);
+            if ($user && $user->permission_id > $this->partner_id) {
+                // Ajustado para 'autor' para manter consistência com o getPointsExtracts
+                $baseQuery->where('autor', $user->id);
             }
 
             // Aplicar filtros de período
@@ -1180,10 +1184,13 @@ class PointController extends Controller
                 });
             }
 
-            // Se filtro por expired, aplicar na query base
+            // Se filtro por expired, aplicar na query base (transações ou créditos vencidos)
             $isExpiredFilter = ($type === 'expired' || $type === 'expiracao');
             if ($isExpiredFilter) {
-                $baseQuery->where('status', 'expirado');
+                $baseQuery->where(function($q) {
+                    $q->where('tipo', 'expired')
+                      ->orWhere('status', 'expirado');
+                });
             }
 
             // Total de transações (respeita filtro de tipo quando fornecido)
@@ -1210,7 +1217,7 @@ class PointController extends Controller
             } else {
                 $redeemedQuery = clone $baseQuery;
                 $redeemedQuery->where('tipo', 'debito');
-                $totalRedeemed = (int) $redeemedQuery->sum('valor');
+                $totalRedeemed = abs((int) $redeemedQuery->sum('valor')); // Aplicado abs() para tratar valores negativos
             }
 
             // Total de pontos expirados (saldo real que expirou = valor - valor_usado)
