@@ -133,14 +133,53 @@ class ClientController extends Controller
             Log::error('Error in ClientController transform: ' . $e->getMessage());
             throw $e;
         }
-        // dd($clients);
+        // Calcular estatísticas globais (Total absoluto do banco para este tenant/permissão)
+        // Ignoramos filtros de busca/status aqui para que os cards mostrem o "panorama geral" do sistema
+        $statsBaseQuery = Client::query()->where('permission_id','=', $this->permission_id);
+        if ($user && (int)$user->permission_id >= 3) {
+            $statsBaseQuery->where('autor', $user->id);
+        }
+        
+        // Respeitar filtro de lixeira para as estatísticas também
+        if($request->filled('excluido') && $request->input('excluido') == 's'){
+            $statsBaseQuery->where('excluido', 's');
+        }else{
+            $statsBaseQuery->where(function($q) {
+                $q->whereNull('deletado')->orWhere('deletado', '!=', 's');
+            });
+            $statsBaseQuery->where(function($q) {
+                $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
+            });
+        }
+
+        $global_stats = [
+            'total' => (clone $statsBaseQuery)->count(),
+            'actived' => (clone $statsBaseQuery)->where('status', 'actived')->count(),
+            'inactived' => (clone $statsBaseQuery)->where('status', 'inactived')->count(),
+            'pre_registred' => (clone $statsBaseQuery)->where('status', 'pre_registred')->count(),
+        ];
+
         if($request->segment(4) == 'registred'){
             $ret = $clients->getCollection()->map(function ($client) {
                 return $this->map_client($client);
             });
-            return $ret;
+            return response()->json([
+                'data' => $ret,
+                'total' => $clients->total(),
+                'current_page' => $clients->currentPage(),
+                'last_page' => $clients->lastPage(),
+                'global_stats' => $global_stats
+            ]);
         }
-        return response()->json($clients);
+        
+        return response()->json([
+            'data' => $clients->items(),
+            'total' => $clients->total(),
+            'current_page' => $clients->currentPage(),
+            'last_page' => $clients->lastPage(),
+            'per_page' => $clients->perPage(),
+            'global_stats' => $global_stats
+        ]);
     }
 
     /**

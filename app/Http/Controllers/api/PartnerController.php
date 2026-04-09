@@ -101,7 +101,25 @@ class PartnerController extends Controller
             return $partner;
         });
 
-        return response()->json($partners);
+        // Calcular estatísticas globais (Panorama geral do banco de dados)
+        $permission_id = (int)$user->permission_id;
+        if($permission_id == $this->partner_permission_id || $permission_id > $this->partner_permission_id){
+            $baseStatsQuery = Partner::where('deletado', 'n')->where('id', $user->id);
+        }else{
+            $baseStatsQuery = Partner::where('deletado', 'n');
+        }
+
+        $global_stats = [
+            'total' => (clone $baseStatsQuery)->count(),
+            'ativo_s' => (clone $baseStatsQuery)->where('ativo', 's')->count(),
+            'tipo_pf' => (clone $baseStatsQuery)->where('tipo_pessoa', 'pf')->count(),
+            'tipo_pj' => (clone $baseStatsQuery)->where('tipo_pessoa', 'pj')->count(),
+        ];
+
+        $response = $partners->toArray();
+        $response['global_stats'] = $global_stats;
+
+        return response()->json($response);
     }
 
     /**
