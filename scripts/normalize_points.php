@@ -2,16 +2,20 @@
 
 /**
  * Script de normalização de dados de pontos.
- * 
+ *
  * ATENÇÃO: Este script é DESTRUTIVO para registros de expiração históricos.
  * Ele remove as expirações lançadas com valores incorretos (valor_usado=0)
- * e as relança corretamente após recalcular o consumo PEPS histórico.
- * 
+ * e prepara os dados para que points:expire as relance corretamente.
+ *
  * Ordem de execução:
- * 1. Remove APENAS os registros de expiração lançados (origem=expiracao)
- * 2. Redefine valor_usado de todos os créditos para 0
- * 3. Recalcula o valor_usado de cada crédito por PEPS (incluindo expirados históricos)
- * 4. Marca como 'expirado' os créditos que já passaram da data
+ * 1. Remove os registros de expiração existentes (origem=expiracao)
+ * 2. Redefine valor_usado e status de todos os créditos para ativo/0
+ * 3. Recalcula o valor_usado via PEPS usando apenas débitos reais (resgates)
+ *
+ * ⚠️  NÃO faz a expiração em si - isso é responsabilidade do points:expire
+ *     que corretamente calcula saldo = valor - valor_usado e cria os registros.
+ *
+ * Após este script, rode obrigatoriamente: php artisan points:expire
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -31,28 +35,27 @@ foreach ($tenants as $tenant) {
         DB::beginTransaction();
         try {
 
-            // PASSO 1: Remover registros de expiração lançados (podem estar errados)
-            $expiracoes = Point::whereIn('tipo', ['debito', 'expired'])
+            // PASSO 1: Remover registros de expiração existentes (podem estar errados)
+            $count = Point::whereIn('tipo', ['debito', 'expired'])
                 ->where('origem', 'expiracao')
-                ->get();
-            $count = $expiracoes->count();
+                ->count();
             echo "  Passo 1: Removendo {$count} registros de expiração existentes...\n";
             Point::whereIn('tipo', ['debito', 'expired'])
                 ->where('origem', 'expiracao')
                 ->forceDelete();
 
-            // PASSO 2: Resetar valor_usado de todos os créditos
+            // PASSO 2: Resetar valor_usado e status de todos os créditos
             $creditos = Point::where('tipo', 'credito')->count();
-            echo "  Passo 2: Resetando valor_usado de {$creditos} créditos para 0...\n";
+            echo "  Passo 2: Resetando {$creditos} créditos (valor_usado=0, status=ativo)...\n";
             Point::where('tipo', 'credito')
                 ->update([
                     'valor_usado' => 0,
-                    'status' => 'ativo', // Reativar créditos marcados como expirado incorretamente
+                    'status'      => 'ativo', // Reativar para que points:expire possa processar
                 ]);
 
-            // PASSO 3: Recalcular consumo PEPS histórico por cliente
+            // PASSO 3: Recalcular consumo PEPS histórico (apenas resgates reais)
             $clientIds = Point::distinct()->pluck('client_id');
-            $total = $clientIds->count();
+            $total     = $clientIds->count();
             $processed = 0;
             echo "  Passo 3: Recalculando PEPS para {$total} clientes...\n";
 
@@ -60,7 +63,7 @@ foreach ($tenants as $tenant) {
                 $processed++;
 
                 $debitos = Point::where('client_id', $clientId)
-                    ->where('tipo', 'debito') // Apenas resgates reais (não expirações que removemos)
+                    ->where('tipo', 'debito') // Apenas resgates reais (não expirações)
                     ->where('status', '!=', 'cancelado')
                     ->where('excluido', 'n')
                     ->where('deletado', 'n')
@@ -70,6 +73,8 @@ foreach ($tenants as $tenant) {
                     ->get();
 
                 foreach ($debitos as $debito) {
+                    // consumePointsForRecalculation: não filtra por data de expiração
+                    // pois reconstrói o estado histórico de quando os créditos eram válidos
                     Point::consumePointsForRecalculation($clientId, abs($debito->valor));
                 }
 
@@ -78,25 +83,8 @@ foreach ($tenants as $tenant) {
                 }
             }
 
-            // PASSO 4: Marcar créditos vencidos como 'expirado' de acordo com data_expiracao
-            $hoje = now()->toDateString();
-            $creditosExpirados = Point::where('tipo', 'credito')
-                ->where('status', 'ativo')
-                ->whereNotNull('data_expiracao')
-                ->where('data_expiracao', '<=', $hoje)
-                ->count();
-            echo "  Passo 4: Marcando {$creditosExpirados} créditos vencidos como 'expirado'...\n";
-            Point::where('tipo', 'credito')
-                ->where('status', 'ativo')
-                ->whereNotNull('data_expiracao')
-                ->where('data_expiracao', '<=', $hoje)
-                ->update([
-                    'status' => 'expirado',
-                    'valor_usado' => DB::raw('valor') // Marcar como totalmente consumido
-                ]);
-
             DB::commit();
-            echo "  ✓ Normalização concluída com sucesso para tenant {$tenant->id}!\n";
+            echo "  ✓ Normalização concluída para tenant {$tenant->id}!\n";
 
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -106,6 +94,7 @@ foreach ($tenants as $tenant) {
     });
 }
 
-echo "\n=== Normalização global concluída! ===\n";
-echo "Agora rode: php artisan points:expire\n";
-echo "Para registrar as expirações corretas com base nos saldos reais.\n";
+echo "\n=== Normalização concluída! ===\n";
+echo "Execute agora: php artisan points:expire\n";
+echo "O comando irá calcular saldo = valor - valor_usado para cada crédito vencido\n";
+echo "e criar os registros de expiração com os valores CORRETOS.\n";
