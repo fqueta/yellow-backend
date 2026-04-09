@@ -76,7 +76,18 @@ class RetroactivePointExpiration extends Command
         $diasExpiracao = Qlib::qoption('pontos_dias_expiracao');
         
         if (!$diasExpiracao || (int) $diasExpiracao <= 0) {
-            $this->warn("   Regra de expiração não configurada (pontos_dias_expiracao) no contexto atual. Ignorando.");
+            $msg = "Regra de expiração não configurada (pontos_dias_expiracao) no contexto atual. Ignorando.";
+            $this->warn("   " . $msg);
+
+            SystemLog::create([
+                'event_type' => 'point_expiration_retroactive',
+                'status' => 'warning',
+                'description' => $msg,
+                'metadata' => [
+                    'pontos_dias_expiracao_value' => $diasExpiracao
+                ],
+            ]);
+
             return 0;
         }
 

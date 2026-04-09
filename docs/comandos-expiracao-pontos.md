@@ -45,12 +45,24 @@ Concluído! Total de pontos expirados: 23
 
 ### Agendamento
 
-Este comando está configurado para rodar diariamente às 00:00:
+Este comando está configurado internamente para rodar diariamente às 00:00, dentro da rotina de comandos do Laravel:
 
 ```php
 // routes/console.php
 Schedule::command('points:expire')->daily();
 ```
+
+> **IMPORTANTE**: Para que o agendamento funcione automaticamente na produção, você deve configurar o CRON no seu servidor (cPanel, Plesk, ou via terminal Linux).
+
+#### Configuração do CRON no Servidor
+
+Adicione a seguinte linha no seu gerenciador de tarefas CRON do servidor para rodar a cada minuto (o Laravel cuidará de executar o schedule apenas na hora certa):
+
+```bash
+* * * * * cd /home/maisaqu/public_html/point_store/yellow-backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+*(Lembre-se de verificar no servidor se o caminho do PHP, como `/opt/cpanel/ea-php83/root/usr/bin/php` precisa ser usado no lugar de apenas `php` dependendo da sua hospedagem)*
 
 ---
 
