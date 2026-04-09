@@ -208,8 +208,15 @@ class PointController extends Controller
             $query->where('client_id', $request->client_id);
         }
 
-        if ($request->has('tipo') && in_array($request->tipo, ['credito', 'debito'])) {
-            $query->where('tipo', $request->tipo);
+        // Filtro de tipo: aceita 'tipo' (snake_case) ou 'type' (camelCase do frontend)
+        $typeParam = $request->get('type') ?? $request->get('tipo');
+        if ($typeParam) {
+            if ($typeParam === 'expired') {
+                // Registros de expiração: tipo = 'expired'
+                $query->where('tipo', 'expired');
+            } elseif (in_array($typeParam, ['credito', 'debito'])) {
+                $query->where('tipo', $typeParam);
+            }
         }
 
         if ($request->has('status') && in_array($request->status, ['ativo', 'expirado', 'usado', 'cancelado'])) {

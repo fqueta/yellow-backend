@@ -133,30 +133,31 @@ class ClientController extends Controller
             Log::error('Error in ClientController transform: ' . $e->getMessage());
             throw $e;
         }
-        // Calcular estatísticas globais (Total absoluto do banco para este tenant/permissão)
-        // Ignoramos filtros de busca/status aqui para que os cards mostrem o "panorama geral" do sistema
-        $statsBaseQuery = Client::query()->where('permission_id','=', $this->permission_id);
+        // Calcular estatísticas globais via Query Builder direto para máxima performance e precisão
+        $pId = (int)$this->permission_id;
+        $statsBase = \Illuminate\Support\Facades\DB::table('users')
+            ->where('permission_id', '=', $pId);
+            
+        // Filtro de autor se não for admin
         if ($user && (int)$user->permission_id >= 3) {
-            $statsBaseQuery->where('autor', $user->id);
+            $statsBase->where('autor', $user->id);
         }
-        
-        // Respeitar filtro de lixeira para as estatísticas também
+
         if($request->filled('excluido') && $request->input('excluido') == 's'){
-            $statsBaseQuery->where('excluido', 's');
+            $statsBase->where('excluido', 's');
         }else{
-            $statsBaseQuery->where(function($q) {
+            $statsBase->where(function($q) {
                 $q->whereNull('deletado')->orWhere('deletado', '!=', 's');
-            });
-            $statsBaseQuery->where(function($q) {
+            })->where(function($q) {
                 $q->whereNull('excluido')->orWhere('excluido', '!=', 's');
             });
         }
 
         $global_stats = [
-            'total' => (clone $statsBaseQuery)->count(),
-            'actived' => (clone $statsBaseQuery)->where('status', 'actived')->count(),
-            'inactived' => (clone $statsBaseQuery)->where('status', 'inactived')->count(),
-            'pre_registred' => (clone $statsBaseQuery)->where('status', 'pre_registred')->count(),
+            'total' => (clone $statsBase)->count(),
+            'actived' => (clone $statsBase)->where('status', 'actived')->count(),
+            'inactived' => (clone $statsBase)->where('status', 'inactived')->count(),
+            'pre_registred' => (clone $statsBase)->where('status', 'pre_registred')->count(),
         ];
 
         if($request->segment(4) == 'registred'){
