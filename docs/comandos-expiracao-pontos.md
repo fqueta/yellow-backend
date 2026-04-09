@@ -200,10 +200,14 @@ php artisan tenants:migrate
 #    Este script:
 #    - Remove expirações lançadas incorretamente
 #    - Recalcula valor_usado de todos os créditos via PEPS histórico
-#    - Marca créditos vencidos corretamente
+#    - Deixa os créditos vencidos com status=ativo para serem processados pelo points:expire
 php scripts/normalize_points.php
 
-# 6. Criar os registros de expiração corretos com base nos saldos reais
+# 6. Definir data de expiração para créditos antigos que não possuem data_expiracao
+#    (créditos criados antes da configuração da regra de expiração)
+php artisan points:retroactive-expiration
+
+# 7. Criar os registros de expiração corretos com base nos saldos reais
 php artisan points:expire
 ```
 

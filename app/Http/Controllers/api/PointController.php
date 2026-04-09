@@ -1212,17 +1212,37 @@ class PointController extends Controller
                 $totalRedeemed = (int) $redeemedQuery->sum('valor');
             }
 
-            // Total de pontos expirados (apenas créditos)
+            // Total de pontos expirados (saldo real que expirou = valor - valor_usado)
             if ($type === 'debito') {
                 $totalExpired = 0; // não há expiração para débitos
             } elseif ($isExpiredFilter) {
-                // Já está filtrado por expirados
-                $totalExpired = (int) (clone $baseQuery)->sum('valor');
+                // Já está filtrado por expirados: soma o saldo que realmente expirou
+                $totalExpired = (int) (clone $baseQuery)
+                    ->where('tipo', 'expired')
+                    ->sum(DB::raw('ABS(valor)'));
+
+                // Fallback: se não há registros tipo 'expired', usa créditos com status='expirado'
+                if ($totalExpired === 0) {
+                    $totalExpired = (int) (clone $baseQuery)
+                        ->where('tipo', 'credito')
+                        ->where('status', 'expirado')
+                        ->sum(DB::raw('valor - valor_usado'));
+                }
             } else {
+                // Sem filtro de tipo: soma todos os registros de expiração reais (tipo=expired)
                 $expiredQuery = clone $baseQuery;
-                $expiredQuery->where('tipo', 'credito')
-                             ->where('data_expiracao', '<', now());
-                $totalExpired = (int) $expiredQuery->sum('valor');
+                $totalExpired = (int) $expiredQuery
+                    ->where('tipo', 'expired')
+                    ->sum(DB::raw('ABS(valor)'));
+
+                // Fallback: créditos marcados como expirados que não têm registro 'expired' separado
+                if ($totalExpired === 0) {
+                    $expiredQuery2 = clone $baseQuery;
+                    $totalExpired = (int) $expiredQuery2
+                        ->where('tipo', 'credito')
+                        ->where('status', 'expirado')
+                        ->sum(DB::raw('valor - valor_usado'));
+                }
             }
 
             // Usuários ativos (com pelo menos uma transação no escopo)
