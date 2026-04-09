@@ -225,30 +225,16 @@ class Point extends Model
 
     /**
      * Retorna o valor que foi efetivamente resgatado (gasto) pelo cliente.
-     * Baseia-se no valor_usado mas desconta o que foi expirado pelo sistema.
      */
     public function getValorResgatadoAttribute()
     {
         if ($this->tipo !== 'credito') return 0;
         
-        // Se o crédito expirou, o valor resgatado é o total usado menos o que expirou
-        if ($this->status === 'expirado') {
-            // O valor expirado é a diferença entre o total do crédito e o valor usado antes da expiração.
-            // Mas como zeramos o saldo no momento da expiração, guardamos o valor da transação de expiração.
-            // Para simplificar: o valor_usado gravado no crédito ANTES da expiração é o que foi resgatado.
-            // No nosso novo fluxo, o robô atualiza o valor_usado para o total.
-            
-            // Vamos buscar o registro de débito tipo 'expired' vinculado a este crédito
-            $valorExpirado = DB::table('points')
-                ->where('client_id', $this->client_id)
-                ->where('tipo', 'expired')
-                ->where('description', 'like', "%#{$this->id}%")
-                ->sum(DB::raw('ABS(valor)'));
-            
-            return (float)max(0, $this->valor_usado - $valorExpirado);
-        }
+        $totalUsado = (float) ($this->attributes['valor_usado'] ?? 0);
+        $totalExpirado = (float) $this->valor_expirado;
         
-        return (float)$this->valor_usado;
+        // O valor resgatado é o total de uso menos o que foi pro ralo na expiração
+        return (float)max(0, $totalUsado - $totalExpirado);
     }
 
     /**
@@ -256,12 +242,12 @@ class Point extends Model
      */
     public function getValorExpiradoAttribute()
     {
-        if ($this->tipo !== 'credito' || $this->status !== 'expirado') return 0;
+        if ($this->tipo !== 'credito') return 0;
         
-        // Busca o valor da transação de expiração que cita este ID de crédito
-        return (float)DB::table('points')
-            ->where('client_id', $this->client_id)
-            ->where('tipo', 'expired')
+        // Busca débitos com origem expiração que citam este ID de crédito
+        return (float)self::where('client_id', $this->client_id)
+            ->whereIn('tipo', ['expired', 'debito', 'expiracao'])
+            ->where('origem', 'expiracao')
             ->where('description', 'like', "%#{$this->id}%")
             ->sum(DB::raw('ABS(valor)'));
     }
