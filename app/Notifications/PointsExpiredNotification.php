@@ -32,7 +32,7 @@ class PointsExpiredNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Expira├º├úo de Pontos - Relat├│rio')
+            ->subject('Expiração de Pontos - Relatório')
             ->markdown('emails.points-expired', [
                 'expiredCount' => $this->expiredCount,
                 'tenantId' => $this->tenantId,
@@ -47,7 +47,7 @@ class PointsExpiredNotification extends Notification implements ShouldQueue
             'name' => $notifiable->name ?? $notifiable->email
         ]];
 
-        $subject = 'Expira├º├úo de Pontos - Relat├│rio';
+        $subject = 'Expiração de Pontos - Relatório';
         $htmlContent = $this->buildHtml();
 
         return [
@@ -66,7 +66,7 @@ class PointsExpiredNotification extends Notification implements ShouldQueue
         <html>
         <head>
             <meta charset='utf-8'>
-            <title>Expira├º├úo de Pontos</title>
+            <title>Expiração de Pontos</title>
             <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -79,21 +79,21 @@ class PointsExpiredNotification extends Notification implements ShouldQueue
         <body>
             <div class='container'>
                 <div class='header'>
-                    <h1>📅 Expira├º├úo de Pontos</h1>
+                    <h1>📅 Expiração de Pontos</h1>
                 </div>
                 <div class='content'>
-                    <p>Uma opera├º├úo de expira├º├úo de pontos foi executada.</p>
+                    <p>Uma operação de expiração de pontos foi executada.</p>
                     
                     <div class='stats'>
                         <h3>Resultados</h3>
                         <ul>
                             <li><strong>Pontos expirados:</strong> {$this->expiredCount}</li>
-                            <li><strong>Data da execu├º├úo:</strong> {$this->date}</li>
+                            <li><strong>Data da execução:</strong> {$this->date}</li>
                             <li><strong>{$tenantInfo}</strong></li>
                         </ul>
                     </div>
 
-                    <p>Este ├® um email autom├ítico, n├úo responda.</p>
+                    <p>Este é um email automático, não responda.</p>
                 </div>
                 <div class='footer'>
                     <p>Point Store - Sistema de Fidelidade</p>

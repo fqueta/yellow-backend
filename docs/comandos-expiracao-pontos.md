@@ -52,17 +52,22 @@ Este comando está configurado internamente para rodar diariamente às 00:00, de
 Schedule::command('points:expire')->daily();
 ```
 
-> **IMPORTANTE**: Para que o agendamento funcione automaticamente na produção, você deve configurar o CRON no seu servidor (cPanel, Plesk, ou via terminal Linux).
+> **IMPORTANTE**: Para que o agendamento funcione automaticamente na produção, você deve configurar o CRON no seu servidor.
 
-#### Configuração do CRON no Servidor
+#### Configuração no CWP (Control Web Panel) do Usuário
 
-Adicione a seguinte linha no seu gerenciador de tarefas CRON do servidor para rodar a cada minuto (o Laravel cuidará de executar o schedule apenas na hora certa):
+No painel de hospedagem (Crontab for user), preencha o formulário da seguinte maneira:
 
-```bash
-* * * * * cd /home/maisaqu/public_html/point_store/yellow-backend && php artisan schedule:run >> /dev/null 2>&1
-```
+- **Command:**
+  ```bash
+  /usr/local/bin/php /home/maisaqu/public_html/point_store/yellow-backend/artisan schedule:run >> /dev/null 2>&1
+  ```
+- **Description:** Executar rotinas agendadas do sistema e expiração de pontos
+- **When runs? (Quando rodar?):**
+  - Mude a opção em "Simple schedule" para rodar a cada minuto: **`Every minute [* * * * *]`**.
+  - *(Se a opção não existir na lista rápida, clique em "Show advanced options" e coloque um asterisco `*` em todos os 5 campos: Minute, Hour, Day, Month, Weekday).*
 
-*(Lembre-se de verificar no servidor se o caminho do PHP, como `/opt/cpanel/ea-php83/root/usr/bin/php` precisa ser usado no lugar de apenas `php` dependendo da sua hospedagem)*
+Isso garante que o Laravel cheque o relógio a cada minuto, mas ele só vai rodar o comando dos pontos à meia-noite, conforme programado no código.
 
 ---
 
