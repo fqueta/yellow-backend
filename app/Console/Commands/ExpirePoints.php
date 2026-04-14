@@ -43,10 +43,13 @@ class ExpirePoints extends Command
 
             foreach ($tenants as $tenant) {
                 $tenant->run(function () use (&$totalExpirados, $tenant, $batchId) {
-                    $count = $this->expirePointsForCurrentContext($batchId);
+                    $result = $this->expirePointsForCurrentContext($batchId);
+                    $count = $result['total_processed'];
+                    $created = $result['total_created'];
+                    
                     $totalExpirados += $count;
                     if ($count > 0) {
-                        $this->line("  Tenant [{$tenant->id}]: {$count} pontos expirados");
+                        $this->line("  Tenant [{$tenant->id}]: {$count} créditos processados ({$created} novos débitos no extrato)");
                         $this->notifyAdmins($count, $tenant->id, $batchId);
                     }
 
@@ -54,17 +57,21 @@ class ExpirePoints extends Command
                     SystemLog::create([
                         'event_type' => 'point_expiration_daily',
                         'status' => 'success',
-                        'description' => "Rotina diária de expiração de pontos concluída. Lote: {$batchId}",
+                        'description' => "Rotina diária concluída. Processados: {$count} créditos | Lançados: {$created} débitos no extrato. Lote: {$batchId}",
                         'metadata' => [
                             'batch_id' => $batchId,
-                            'total_expired' => $count
+                            'total_processed' => $count,
+                            'total_created' => $created
                         ],
                     ]);
                 });
             }
         } else {
             // Sem multi-tenancy
-            $count = $this->expirePointsForCurrentContext($batchId);
+            $result = $this->expirePointsForCurrentContext($batchId);
+            $count = $result['total_processed'];
+            $created = $result['total_created'];
+            
             $totalExpirados += $count;
             if ($count > 0) {
                 $this->notifyAdmins($count, null, $batchId);
@@ -75,10 +82,11 @@ class ExpirePoints extends Command
                     SystemLog::create([
                         'event_type' => 'point_expiration_daily',
                         'status' => 'success',
-                        'description' => "Rotina diária de expiração de pontos concluída. Lote: {$batchId}",
+                        'description' => "Rotina diária concluída. Processados: {$count} créditos | Lançados: {$created} débitos no extrato. Lote: {$batchId}",
                         'metadata' => [
                             'batch_id' => $batchId,
-                            'total_expired' => $count
+                            'total_processed' => $count,
+                            'total_created' => $created
                         ],
                     ]);
                 }
@@ -137,7 +145,7 @@ class ExpirePoints extends Command
     /**
      * Expira pontos no contexto atual (tenant ou padrão)
      */
-    private function expirePointsForCurrentContext(string $batchId): int
+    private function expirePointsForCurrentContext(string $batchId): array
     {
         $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
         if ($expiracaoAtiva !== 's') {
@@ -166,7 +174,8 @@ class ExpirePoints extends Command
             ->where('data_expiracao', '<=', now()->toDateString())
             ->get();
 
-        $count = 0;
+        $totalProcessados = 0;
+        $totalLancamentosExtrato = 0;
 
         foreach ($pontosParaExpirar as $ponto) {
             $saldoRestante = (float) $ponto->valor - (float) $ponto->valor_usado;
@@ -189,6 +198,7 @@ class ExpirePoints extends Command
                         'valor_expirado' => $saldoRestante
                     ]
                 ]);
+                $totalLancamentosExtrato++;
             }
 
             // Marcar o crédito original como expirado e zerar o saldo "disponível" dele
@@ -197,9 +207,12 @@ class ExpirePoints extends Command
                 'valor_usado' => $ponto->valor // Marcar como totalmente usado para não contar mais em saldos manuais
             ]);
 
-            $count++;
+            $totalProcessados++;
         }
 
-        return $count;
+        return [
+            'total_processed' => $totalProcessados,
+            'total_created' => $totalLancamentosExtrato
+        ];
     }
 }
