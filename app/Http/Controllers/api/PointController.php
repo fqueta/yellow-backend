@@ -995,6 +995,11 @@ class PointController extends Controller
             $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
         }
 
+        // Filtro por lote de expiração (batch_id)
+        if ($request->has('batch_id')) {
+            $query->where('config->batch_id', $request->batch_id);
+        }
+
         // Busca por nome, email, descrição ou ID
         if ($search) {
             $query->where(function($q) use ($search) {

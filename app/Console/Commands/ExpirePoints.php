@@ -27,7 +27,8 @@ class ExpirePoints extends Command
 
     public function handle()
     {
-        $this->info('Iniciando expiração de pontos...');
+        $batchId = 'EXP-' . now()->format('Ymd-His');
+        $this->info("Iniciando expiração de pontos... [Lote: {$batchId}]");
 
         $totalExpirados = 0;
 
@@ -41,20 +42,21 @@ class ExpirePoints extends Command
             }
 
             foreach ($tenants as $tenant) {
-                $tenant->run(function () use (&$totalExpirados, $tenant) {
-                    $count = $this->expirePointsForCurrentContext();
+                $tenant->run(function () use (&$totalExpirados, $tenant, $batchId) {
+                    $count = $this->expirePointsForCurrentContext($batchId);
                     $totalExpirados += $count;
                     if ($count > 0) {
                         $this->line("  Tenant [{$tenant->id}]: {$count} pontos expirados");
-                        $this->notifyAdmins($count, $tenant->id);
+                        $this->notifyAdmins($count, $tenant->id, $batchId);
                     }
 
                     // Criar log do sistema no banco do tenant
                     SystemLog::create([
                         'event_type' => 'point_expiration_daily',
                         'status' => 'success',
-                        'description' => "Rotina diária de expiração de pontos concluída.",
+                        'description' => "Rotina diária de expiração de pontos concluída. Lote: {$batchId}",
                         'metadata' => [
+                            'batch_id' => $batchId,
                             'total_expired' => $count
                         ],
                     ]);
@@ -62,10 +64,10 @@ class ExpirePoints extends Command
             }
         } else {
             // Sem multi-tenancy
-            $count = $this->expirePointsForCurrentContext();
+            $count = $this->expirePointsForCurrentContext($batchId);
             $totalExpirados += $count;
             if ($count > 0) {
-                $this->notifyAdmins($count, null);
+                $this->notifyAdmins($count, null, $batchId);
             }
 
             try {
@@ -73,8 +75,9 @@ class ExpirePoints extends Command
                     SystemLog::create([
                         'event_type' => 'point_expiration_daily',
                         'status' => 'success',
-                        'description' => "Rotina diária de expiração de pontos concluída.",
+                        'description' => "Rotina diária de expiração de pontos concluída. Lote: {$batchId}",
                         'metadata' => [
+                            'batch_id' => $batchId,
                             'total_expired' => $count
                         ],
                     ]);
@@ -83,7 +86,7 @@ class ExpirePoints extends Command
             }
         }
 
-        $this->info("Concluído! Total de pontos expirados: {$totalExpirados}");
+        $this->info("Concluído! Total de pontos expirados: {$totalExpirados} [Lote: {$batchId}]");
 
         return 0;
     }
@@ -91,7 +94,7 @@ class ExpirePoints extends Command
     /**
      * Envia notificação aos administradores (permission_id = 1)
      */
-    private function notifyAdmins(int $expiredCount, ?string $tenantId): void
+    private function notifyAdmins(int $expiredCount, ?string $tenantId, string $batchId): void
     {
         $admins = User::where('permission_id', 1)
             ->where('ativo', 's')
@@ -104,7 +107,7 @@ class ExpirePoints extends Command
                 'event_type' => 'admin_notification_skip',
                 'status' => 'warning',
                 'description' => "Nenhum administrador encontrado para notificar (Tenant: {$tenantId}).",
-                'metadata' => ['expired_count' => $expiredCount, 'tenant_id' => $tenantId]
+                'metadata' => ['batch_id' => $batchId, 'expired_count' => $expiredCount, 'tenant_id' => $tenantId]
             ]);
             return;
         }
@@ -112,8 +115,9 @@ class ExpirePoints extends Command
         SystemLog::create([
             'event_type' => 'admin_notification_start',
             'status' => 'info',
-            'description' => "Iniciando notificação de " . $admins->count() . " administradores sobre expiração de pontos.",
+            'description' => "Iniciando notificação de " . $admins->count() . " administradores sobre expiração de pontos (Lote: {$batchId}).",
             'metadata' => [
+                'batch_id' => $batchId,
                 'expired_count' => $expiredCount,
                 'tenant_id' => $tenantId,
                 'admins_count' => $admins->count()
@@ -133,7 +137,7 @@ class ExpirePoints extends Command
     /**
      * Expira pontos no contexto atual (tenant ou padrão)
      */
-    private function expirePointsForCurrentContext(): int
+    private function expirePointsForCurrentContext(string $batchId): int
     {
         $expiracaoAtiva = Qlib::qoption('pontos_expiracao_ativa') ?? 'n';
         if ($expiracaoAtiva !== 's') {
@@ -143,7 +147,8 @@ class ExpirePoints extends Command
                     SystemLog::create([
                         'event_type' => 'point_expiration_skipped',
                         'status' => 'info',
-                        'description' => "A rotina de expiração de pontos foi ignorada pois a funcionalidade está desativida nas configurações do tenant.",
+                        'metadata' => ['batch_id' => $batchId],
+                        'description' => "A rotina de expiração de pontos foi ignorada pois a funcionalidade está desativida nas configurações do tenant. (Lote: {$batchId})",
                     ]);
                 }
             } catch (\Throwable $e) {
@@ -173,11 +178,12 @@ class ExpirePoints extends Command
                     'valor' => -$saldoRestante,
                     'tipo' => 'expired',
                     'origem' => 'expiracao',
-                    'status' => 'finalizado',
+                    'status' => 'expirado',
                     'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
                     'data' => now()->toDateString(),
                     'data_expiracao' => $ponto->data_expiracao, // Copia para fins de histórico e exibição no extrato
                     'config' => [
+                        'batch_id' => $batchId,
                         'referencia_credito_id' => $ponto->id,
                         'valor_original_credito' => $ponto->valor,
                         'valor_expirado' => $saldoRestante

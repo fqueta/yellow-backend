@@ -40,6 +40,7 @@ class Point extends Model
         'usuario_id',
         'pedido_id',
         'config',
+        'status',
         'autor',
         'ativo',
         'excluido',
