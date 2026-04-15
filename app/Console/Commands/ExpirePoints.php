@@ -161,7 +161,10 @@ class ExpirePoints extends Command
                 }
             } catch (\Throwable $e) {
             }
-            return 0;
+            return [
+                'total_processed' => 0,
+                'total_created' => 0
+            ];
         }
 
         // Buscar créditos ativos vencidos que ainda possuem saldo (valor > valor_usado)
