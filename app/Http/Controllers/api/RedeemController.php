@@ -227,11 +227,7 @@ class RedeemController extends Controller
                 return response()->json(['error' => 'Acesso negado'], 403);
             }
 
-            // Verificar permissão de visualização
-            if (!$this->permissionService->isHasPermission('view')) {
-                return response()->json(['error' => 'Acesso negado'], 403);
-            }
-
+            
             $perPage = $request->input('per_page', 10);
             $page = (int) $request->input('page', 1);
             $orderBy = $request->input('order_by', 'created_at');
@@ -247,9 +243,9 @@ class RedeemController extends Controller
                 ->orderBy($orderBy, $order)
                 ->where('excluido', 'n');
 
-            //se a permission_id dele form maior ou igual a 5, então é um parceiro e só pode ver os seus próprios resgate
-            //se for administrador (permission_id <= 1), pode ver tudo
-            if((int)$user->permission_id >= 5 && (int)$user->permission_id != 1){
+            // se a permission_id for maior ou igual a 6, o usuário não é administrador (ex: parceiro)
+            // e por segurança só pode ver os resgates onde ele é o autor
+            if((int)$user->permission_id >= 6){
                 $query->where('autor', $user->id);
             }
             // Filtros opcionais
