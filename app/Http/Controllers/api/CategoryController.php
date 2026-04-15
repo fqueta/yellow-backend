@@ -98,6 +98,46 @@ class CategoryController extends Controller
     }
 
     /**
+     * PT-BR: Lista categorias para exibição na loja (vitrine).
+     * Não exige permissão administrativa 'view', apenas autenticação.
+     * 
+     * EN: Lists categories for store display (showcase).
+     * Does not require 'view' administrative permission, only authentication.
+     */
+    public function indexStore(Request $request)
+    {
+        $user = request()->user();
+        if (!$user) {
+            return response()->json(['error' => 'Não autenticado'], 401);
+        }
+
+        $perPage = $request->input('per_page', 10);
+        $order_by = $request->input('order_by', 'name');
+        $order = $request->input('order', 'asc');
+
+        $query = Category::query()
+            ->where('active', true)
+            ->where('entidade', 'produtos') // Na loja geralmente só mostramos categorias de produtos
+            ->orderBy($order_by, $order);
+
+        if ($request->filled('parent_id')) {
+            if ($request->input('parent_id') === 'null') {
+                $query->whereNull('parent_id');
+            } else {
+                $query->where('parent_id', $request->input('parent_id'));
+            }
+        }
+
+        $categories = $query->paginate($perPage);
+        
+        $categories->each(function($category){
+            $category->icon = $category->config['icon'] ?? '📦';
+        });
+
+        return response()->json($categories);
+    }
+
+    /**
      * Sanitiza os dados de entrada
      */
     private function sanitizeInput($data)

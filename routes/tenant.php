@@ -255,6 +255,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::post('products/redeem', [RedeemController::class, 'redeem'])->name('products.redeem');
         // Produtos de vitrine (loja) - autenticado
         Route::get('point-store/products', [ProductController::class, 'indexStore'])->name('point-store.products.index');
+        Route::get('point-store/categories', [CategoryController::class, 'indexStore'])->name('point-store.categories.index');
         Route::get('point-store/redemptions', [ProductController::class, 'getUserRedemptions'])->name('products.user-redemptions');
         Route::get('point-store/redemptions/{id}', [RedeemController::class, 'show'])->name('point-store.redemptions.show');
         Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
