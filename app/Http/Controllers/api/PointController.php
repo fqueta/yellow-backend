@@ -812,7 +812,13 @@ class PointController extends Controller
     private function calculateBalanceBefore($transaction)
     {
         $previousTransactions = Point::where('client_id', $transaction->client_id)
-                                   ->where('created_at', '<', $transaction->created_at)
+                                   ->where(function ($query) use ($transaction) {
+                                       $query->where('created_at', '<', $transaction->created_at)
+                                             ->orWhere(function ($q) use ($transaction) {
+                                                 $q->where('created_at', '=', $transaction->created_at)
+                                                   ->where('id', '<', $transaction->id);
+                                             });
+                                   })
                                    ->where('excluido', 'n')
                                    ->where('deletado', 'n')
                                    ->where('status', '!=', 'cancelado')
