@@ -97,6 +97,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
     // Rotas públicas para tokens de formulário
     Route::post('public/form-token', [PublicFormTokenController::class, 'generateToken'])->name('public.form-token.generate');
     Route::post('public/form-token/validate', [PublicFormTokenController::class, 'validateToken'])->name('public.form-token.validate');
+    Route::get('system/status', [OptionController::class, 'systemStatus'])->name('system.status');
 
     // Rota de ativação de cliente com validação de token
     Route::post('clients/active', [ClientController::class, 'store_active'])

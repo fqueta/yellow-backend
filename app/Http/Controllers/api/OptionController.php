@@ -68,6 +68,22 @@ class OptionController extends Controller
 
         return response()->json(['data'=>$ret]);
     }
+
+    /**
+     * Expõe status público do sistema para bloqueios de frontend.
+     */
+    public function systemStatus()
+    {
+        $permissionService = app(PermissionService::class);
+        $maintenanceEnabled = $permissionService->isAdminOnlyMaintenanceModeEnabled();
+
+        return response()->json([
+            'maintenance_mode_admin_only' => $maintenanceEnabled,
+            'message' => $maintenanceEnabled
+                ? 'Sistema em manutenção. Acesso temporariamente restrito ao administrador principal.'
+                : null,
+        ]);
+    }
     /**
      * Metodo para expor dados para a api
      */
