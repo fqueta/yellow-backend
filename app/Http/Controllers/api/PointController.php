@@ -1155,8 +1155,11 @@ class PointController extends Controller
         $allowedSortFields = ['id', 'created_at', 'valor', 'tipo', 'status', 'data'];
         if (in_array($sort, $allowedSortFields)) {
             $query->orderBy($sort, $order);
+            if ($sort !== 'id') {
+                $query->orderBy('id', 'desc');
+            }
         } else {
-            $query->orderBy('created_at', 'desc');
+            $query->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
         // Executar query com paginação
