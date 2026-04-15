@@ -1176,7 +1176,10 @@ class PointController extends Controller
 
             // Determinar tipo para o frontend
             $frontendType = 'adjustment';
-            if ($point->tipo === 'expired' || $point->status === 'expirado') {
+            
+            if ($point->origem === 'migracao_legado') {
+                $frontendType = 'migration';
+            } elseif ($point->tipo === 'expired') {
                 $frontendType = 'expired';
             } elseif ($point->tipo === 'credito') {
                 $frontendType = 'earned';
@@ -1188,12 +1191,7 @@ class PointController extends Controller
                 $frontendType = 'refund';
             }
 
-            // Verificar se ponto está expirado mas sem status atualizado
-            $isExpired = $point->status === 'expirado'
-                || ($point->data_expiracao && Carbon::parse($point->data_expiracao)->isPast() && $point->tipo === 'credito');
-            if ($isExpired && $frontendType !== 'expired') {
-                $frontendType = 'expired';
-            }
+
 
             return [
                 'id' => (string) $point->id,
@@ -1308,7 +1306,10 @@ class PointController extends Controller
 
             // Query base considerando permissões e registros não excluídos
             $baseQuery = Point::query()
-                ->where('excluido', '!=', 's');
+                ->where('excluido', '!=', 's')
+                ->where(function ($q) {
+                    $q->whereNull('origem')->orWhere('origem', '!=', 'migracao_legado');
+                });
 
             if ($user && $user->permission_id > $this->partner_id) {
                 // Ajustado para 'autor' para manter consistência com o getPointsExtracts
