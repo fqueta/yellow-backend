@@ -104,7 +104,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         ->name('clients.active');
 
     Route::get('products-public',[ProductController::class,'index_public'])->name('product.public');
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'admin.maintenance.access'])->group(function () {
         Route::get('user',[UserController::class,'perfil'])->name('perfil.user');
         Route::get('user/can',[UserController::class,'can_access'])->name('perfil.can');
     Route::get('user/profile',[UserController::class,'showProfile'])->name('user.profile.show');
@@ -171,6 +171,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::delete('points/{id}/force', [PointController::class, 'forceDelete'])->name('points.forceDelete');
         Route::get('points/cliente/{clienteId}/saldo', [PointController::class, 'saldoCliente'])->name('points.saldoCliente');
         Route::get('points/relatorio', [PointController::class, 'relatorio'])->name('points.relatorio');
+        Route::get('points/reports/customers', [PointController::class, 'customerBalancesReport'])->name('points.reports.customers');
         Route::post('points/expirar', [PointController::class, 'expirarPontos'])->name('points.expirarPontos');
         Route::get('admin/users/{userId}/points-balance', [PointController::class, 'getUserPointsBalance'])->name('admin.users.points-balance');
         Route::get('admin/points-extracts', [PointController::class, 'getPointsExtracts'])->name('admin.points-extracts');

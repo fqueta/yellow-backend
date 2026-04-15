@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\MenuController;
+use App\Services\PermissionService;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -45,13 +46,19 @@ class AuthController extends Controller
         }
 // dd($credentials);
         $user = Auth::user();
-
         // Carrega o grupo de permissões
         $pid = $user->permission_id;
         $group = DB::table('permissions')->where('id', $user->permission_id)->first();
-
+// dd($group,$pid,$user->id);
         if (!$group) {
             return response()->json(['message' => 'Permissão não encontrada'], 403);
+        }
+
+        // Bloqueio de manutenção: somente permission_id=1 pode acessar durante manutenção
+        $permissionService = app(PermissionService::class);
+        if ($permissionService->shouldBlockForMaintenance((int) $pid)) {
+            Auth::logout();
+            return $permissionService->maintenanceModeResponse();
         }
 
         // Lista de permissões do grupo

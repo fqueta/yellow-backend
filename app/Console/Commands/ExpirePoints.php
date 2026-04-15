@@ -188,7 +188,7 @@ class ExpirePoints extends Command
                     'tipo' => 'expired',
                     'origem' => 'expiracao',
                     'status' => 'expirado',
-                    'description' => "Expiração de pontos (Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
+                    'description' => "[EXPIRAÇÃO] Saldo expirado por validade (Ref. Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
                     'data' => now()->toDateString(),
                     'data_expiracao' => $ponto->data_expiracao, // Copia para fins de histórico e exibição no extrato
                     'config' => [

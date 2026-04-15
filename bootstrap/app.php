@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\DynamicCors;
+use App\Http\Middleware\EnsureAdminMaintenanceAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ValidatePublicFormToken;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Registrar middlewares personalizados
         $middleware->alias([
+            'admin.maintenance.access' => EnsureAdminMaintenanceAccess::class,
             'validate.public.form.token' => ValidatePublicFormToken::class,
         ]);
     })

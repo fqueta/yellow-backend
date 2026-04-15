@@ -71,18 +71,28 @@ Isso garante que o Laravel cheque o relógio a cada minuto, mas ele só vai roda
 
 ---
 
-## 2. `points:retroactive-expiration`
+## 2. `points:migrate-legacy`
 
-Aplica a regra de expiração retroativamente a pontos antigos que não possuem data de expiração.
+Migra pontos legados (sem data_expiracao) de forma transparente, criando um par de Débito + Novo Crédito.
 
 ### Descrição
 
-Busca todos os pontos de crédito ativos que não possuem `data_expiracao` preenchida e define a data automaticamente com base na configuração `pontos_dias_expiracao`.
+Busca todos os pontos de crédito ativos que não possuem `data_expiracao` preenchida e que ainda possuem saldo.
+Para evitar que clientes percam pontos inesperadamente (por receberem uma data retroativa e já entrarem expirados), o comando:
+1. Faz uma **baixa (Débito)** no crédito antigo.
+2. Cria um **novo Crédito** com o mesmo saldo e com a `data_expiracao` contando a partir da data de execução (HOJE).
 
 ### Uso
 
+**Simulação (Dry-run):**
 ```bash
-php artisan points:retroactive-expiration
+php artisan points:migrate-legacy --dry-run
+```
+*(Não altera o banco de dados. Apenas lista o que seria feito no console).*
+
+**Migração Real:**
+```bash
+php artisan points:migrate-legacy
 ```
 
 ### Comportamento
@@ -92,27 +102,10 @@ php artisan points:retroactive-expiration
 - Para cada tenant, busca pontos que:
   - São do tipo `credito`
   - Estão com status `ativo`
-  - Estão ativos (`ativo = 's'`)
-  - Não estão excluídos (`excluido = 'n'`)
-  - Não estão deletados (`deletado = 'n'`)
+  - Têm saldo restante (`valor > valor_usado`)
   - NÃO têm `data_expiracao` preenchida
-- Calcula a data de expiração: data do ponto + dias configurados
-- Atualiza o campo `data_expiracao`
-
-### Saída Exemplo
-
-```
-Iniciando atualização retroativa de expiração de pontos...
-  Tenant [tenant_1]: 42 pontos atualizados retroativamente.
-  Tenant [tenant_2]: 10 pontos atualizados retroativamente.
-Concluído! Total de pontos atualizados retroativamente: 52
-```
-
-### Configuração
-
-A opção `pontos_dias_expiracao` deve ser configurada nas opções do sistema. Exemplo de valores:
-- `30` = 30 dias
-- `365` = 1 ano
+- Calcula a nova data de expiração: `hoje + pontos_dias_expiracao`
+- Executa a transação gerando o par DÉBITO e NOVO CRÉDITO no extrato.
 
 ---
 
@@ -138,7 +131,7 @@ As notificações são enviadas via **Brevo** (canal transactional email).
 
 ## Fluxo Recomendado
 
-1. **Primeira vez**: Rode `points:retroactive-expiration` para aplicar a data de expiração aos pontos existentes
+1. **Primeira vez (Migração)**: Rode `php artisan points:migrate-legacy` para regularizar pontos antigos que não tinham expiração.
 2. **Rotina diária**: O comando `points:expire` roda automaticamente todo dia às 00:00
 3. **Execução manual**: Rode `points:expire` manualmente quando necessário
 
@@ -146,9 +139,9 @@ As notificações são enviadas via **Brevo** (canal transactional email).
 
 ## Troubleshooting
 
-### "Regra de expiração não configurada"
+### "Configuração pontos_dias_expiracao não definida"
 
-O comando `points:retroactive-expiration` requer que a opção `pontos_dias_expiracao` esteja configurada no sistema. Configure-a primeiro.
+O comando de migração requer que a opção `pontos_dias_expiracao` esteja configurada nas opções de sistema.
 
 ### "Nenhum tenant encontrado"
 
@@ -204,10 +197,12 @@ php artisan tenants:migrate
 php scripts/normalize_points.php
 
 # 6. Definir data de expiração para créditos antigos que não possuem data_expiracao
-#    (créditos criados antes da configuração da regra de expiração)
-php artisan points:retroactive-expiration
+#    Ao invés de atualizar retroativamente, criamos pares Debito/Credito com data a partir de hoje
+php artisan points:migrate-legacy --dry-run 
+# Verifique a saída e se tudo estiver OK, rode definitivamente:
+php artisan points:migrate-legacy
 
-# 7. Criar os registros de expiração corretos com base nos saldos reais
+# 7. Criar os registros de expiração corretos com base nos saldos reais (pontos que já venceram de verdade)
 php artisan points:expire
 ```
 

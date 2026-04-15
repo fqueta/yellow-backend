@@ -35,3 +35,9 @@ Com essas mudanças, o sistema passa a ter um **histórico inabalável**, onde c
 ---
 **Atualizado em:** Abril de 2026  
 **Status:** Implementado e em Operação
+
+
+## O que será feito
+
+1. Normalização do banco de dados de pontos
+2. Normalização dos dados antigos. (Migração de dados antigos para o novo formato) 

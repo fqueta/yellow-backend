@@ -11,6 +11,11 @@ use Illuminate\Http\JsonResponse; // Added for typed responses
 class PermissionService
 {
     /**
+     * Chave da option usada para habilitar o modo de manutenção/admin only.
+     */
+    public const ADMIN_ONLY_MAINTENANCE_OPTION = 'maintenance_mode_admin_only';
+
+    /**
      * Verifica se um usuário (via grupos) tem permissão para ação em uma chave.
      */
     public function can(User $user, string $routeName, string $action = 'view'): bool
@@ -138,6 +143,38 @@ class PermissionService
         return null;
     }
 
+    /**
+     * Informa se o modo de manutenção restrito a administradores está ativo.
+     */
+    public function isAdminOnlyMaintenanceModeEnabled(): bool
+    {
+        return strtolower((string) (Qlib::qoption(self::ADMIN_ONLY_MAINTENANCE_OPTION) ?? 'n')) === 's';
+    }
+
+    /**
+     * Informa se um permission_id deve ser bloqueado pelo modo manutenção.
+     */
+    public function shouldBlockForMaintenance(?int $permissionId): bool
+    {
+        if (!$this->isAdminOnlyMaintenanceModeEnabled()) {
+            return false;
+        }
+
+        return (int) $permissionId > 1;
+    }
+
+    /**
+     * Monta a resposta padrão para bloqueio por manutenção.
+     */
+    public function maintenanceModeResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'code' => 'maintenance_mode_active',
+            'message' => 'Sistema em manutenção. Acesso temporariamente restrito ao administrador principal.',
+        ], 503);
+    }
+
     private function get_url_by_route($name=''){
         $url = '';
         if($name=='api.dashboard'){
@@ -153,9 +190,11 @@ class PermissionService
         if($name=='api.metrics.index' || $name == 'api.metrics.update' || $name == 'api.metrics.show' || $name == 'api.metrics.store' || $name == 'api.metrics.destroy'){
             $url = '/settings/metrics';
         }
-        // dd($name);
         if($name=='api.clients.index' || $name == 'api.users.update' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.restore.patch' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred' || $name == 'api.clients.create'){
             $url = '/clients';
+        }
+        if($name=='api.points.reports.customers' || $name == 'api.users.update' || $name == 'api.clients.update' || $name == 'api.clients.show' || $name == 'api.clients.store' || $name == 'api.clients.destroy' || $name == 'api.clients.restore' || $name == 'api.clients.restore.patch' || $name == 'api.clients.forceDelete' || $name == 'api.clients.pre_registred' || $name == 'api.clients.update_pre_registred' || $name == 'api.clients.create'){
+            $url = '/points-reports';
         }
 
         if($name=='api.clients.inactivate' || $name == 'api.clients.index_pre_registred'){

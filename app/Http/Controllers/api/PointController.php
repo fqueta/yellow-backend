@@ -761,8 +761,13 @@ class PointController extends Controller
             });
         }
 
-        // Total de pontos ganhos
-        $totalEarned = (float) (clone $filteredQuery)->where('tipo', 'credito')->sum('valor');
+        // Total de pontos ganhos (ignorando saldo migrado para não inflacionar o total acumulado)
+        $totalEarned = (float) (clone $filteredQuery)
+            ->where('tipo', 'credito')
+            ->where(function ($q) {
+                $q->whereNull('origem')->orWhere('origem', '!=', 'migracao_legado');
+            })
+            ->sum('valor');
 
         // Total de pontos gastos (absoluto)
         $totalSpent = abs((float) (clone $filteredQuery)->where('tipo', 'debito')->sum('valor'));
@@ -868,7 +873,9 @@ class PointController extends Controller
                 'fim' => $dataFim,
             ],
             'totais' => [
-                'creditos' => $query->clone()->creditos()->sum('valor'),
+                'creditos' => $query->clone()->creditos()->where(function($q) {
+                    $q->whereNull('origem')->orWhere('origem', '!=', 'migracao_legado');
+                })->sum('valor'),
                 'debitos' => abs((float) $query->clone()->debitos()->sum('valor')),
                 'movimentacoes' => $query->clone()->count(),
             ],
@@ -889,6 +896,130 @@ class PointController extends Controller
         $relatorio['saldo_liquido'] = $relatorio['totais']['creditos'] - $relatorio['totais']['debitos'];
 
         return response()->json($relatorio);
+    }
+
+    /**
+     * Listar o saldo total de pontos por cliente.
+     */
+    public function customerBalancesReport(Request $request)
+    {
+        $permissionCheck = $this->checkUserPermission('view');
+        if (!$permissionCheck['success']) {
+            return $permissionCheck['response'];
+        }
+
+        $user = $permissionCheck['user'];
+        $clientPermissionId = (int) (Qlib::qoption('permission_client_id') ?? 6);
+        $perPage = max(1, (int) $request->get('per_page', 15));
+        $search = trim((string) $request->get('search', ''));
+        $order = strtolower((string) $request->get('order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $requestedOrderBy = (string) $request->get('order_by', 'name');
+        $orderByMap = [
+            'name' => 'name',
+            'email' => 'email',
+            'created_at' => 'created_at',
+            'saldo_total' => 'saldo_total',
+        ];
+        $orderBy = $orderByMap[$requestedOrderBy] ?? 'name';
+
+        $query = DB::table('users as clients')
+            ->leftJoin('points', function ($join) {
+                $join->on('points.client_id', '=', 'clients.id')
+                    ->where('points.excluido', '=', 'n')
+                    ->where('points.deletado', '=', 'n');
+            })
+            ->where('clients.permission_id', '=', $clientPermissionId)
+            ->where(function ($q) {
+                $q->whereNull('clients.deletado')
+                    ->orWhere('clients.deletado', '!=', 's');
+            })
+            ->where(function ($q) {
+                $q->whereNull('clients.excluido')
+                    ->orWhere('clients.excluido', '!=', 's');
+            });
+
+        if ((int) $user->permission_id >= 3) {
+            $query->where('clients.autor', '=', $user->id);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('clients.name', 'like', "%{$search}%")
+                    ->orWhere('clients.email', 'like', "%{$search}%")
+                    ->orWhere('clients.cpf', 'like', "%{$search}%")
+                    ->orWhere('clients.cnpj', 'like', "%{$search}%");
+            });
+        }
+
+        $query->select([
+            'clients.id',
+            'clients.name',
+            'clients.email',
+            'clients.cpf',
+            'clients.created_at',
+        ])->selectRaw("
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN points.status != 'cancelado' THEN
+                            CASE
+                                WHEN points.tipo = 'credito' THEN points.valor
+                                ELSE -ABS(points.valor)
+                            END
+                        ELSE 0
+                    END
+                ),
+                0
+            ) - COALESCE(
+                SUM(
+                    CASE
+                        WHEN points.tipo = 'credito'
+                            AND points.status = 'ativo'
+                            AND points.ativo = 's'
+                            AND points.data_expiracao IS NOT NULL
+                            AND points.data_expiracao <= CURDATE()
+                        THEN GREATEST(points.valor - COALESCE(points.valor_usado, 0), 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS saldo_total
+        ");
+
+        $query->groupBy([
+            'clients.id',
+            'clients.name',
+            'clients.email',
+            'clients.cpf',
+            'clients.created_at',
+        ]);
+
+        $summaryBaseQuery = DB::query()->fromSub(clone $query, 'customer_balances');
+        $summary = [
+            'total_clients' => (int) (clone $summaryBaseQuery)->count(),
+            'total_balance' => (float) (clone $summaryBaseQuery)->sum('saldo_total'),
+            'clients_with_balance' => (int) (clone $summaryBaseQuery)
+                ->where('saldo_total', '>', 0)
+                ->count(),
+        ];
+
+        $report = $query
+            ->orderBy($orderBy, $order)
+            ->paginate($perPage);
+
+        $report->getCollection()->transform(function ($item) {
+            $item->saldo_total = (float) $item->saldo_total;
+            return $item;
+        });
+
+        return response()->json([
+            'data' => $report->items(),
+            'total' => $report->total(),
+            'current_page' => $report->currentPage(),
+            'last_page' => $report->lastPage(),
+            'per_page' => $report->perPage(),
+            'summary' => $summary,
+        ]);
     }
 
     /**

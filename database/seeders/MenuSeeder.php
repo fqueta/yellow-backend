@@ -10,9 +10,14 @@ use Illuminate\Support\Facades\DB;
 
 class MenuSeeder extends Seeder
 {
+    /**
+     * Recria menus, perfis base e permissões de menu sem usar truncate,
+     * evitando erro de chave estrangeira nas tabelas relacionadas.
+     */
     public function run()
     {
-        DB::table('menus')->delete(); //Menu::delete();
+        $this->resetSeedTables();
+
         // Dashboard
         Menu::create([
             'title' => 'Dashboard',
@@ -95,84 +100,14 @@ class MenuSeeder extends Seeder
             'order' => 2,
             'parent_id' => $pedidos->id,
         ]);
+        Menu::create([
+            'title' => 'Relatório de Pontos',
+            'url'   => '/points-reports',
+            'icon'  => 'BarChart3',
+            'order' => 3,
+            'parent_id' => $pedidos->id,
+        ]);
 
-        // Ordens de Serviço
-        // Menu::create([
-        //     'title' => 'Propostas',
-        //     'url'   => '/service-orders',
-        //     'icon'  => 'ClipboardList',
-        // ]);
-
-        // ----------------------------
-        // Financeiro (pai + filhos)
-        // ----------------------------
-        // $financeiro = Menu::create([
-        //     'title' => 'Financeiro',
-        //     'url'   => null,
-        //     'icon'  => 'DollarSign',
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Pagamentos',
-        //     'url'   => '/payments',
-        //     'parent_id' => $financeiro->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Fluxo de Caixa',
-        //     'url'   => '/cash-flow',
-        //     'parent_id' => $financeiro->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Contas',
-        //     'url'   => '/financial',
-        //     'parent_id' => $financeiro->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Contas a Pagar',
-        //     'url'   => '/financial/accounts-payable',
-        //     'parent_id' => $financeiro->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Categorias',
-        //     'url'   => '/financial/categories',
-        //     'parent_id' => $financeiro->id,
-        // ]);
-        // ----------------------------
-        // Relatórios (pai + filhos)
-        // ----------------------------
-        // $relatorios = Menu::create([
-        //     'title' => 'Relatórios',
-        //     'url'   => null,
-        //     'icon'  => 'BarChart3',
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Faturamento',
-        //     'url'   => '/reports/revenue',
-        //     'parent_id' => $relatorios->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'OS por Período',
-        //     'url'   => '/reports/service-orders',
-        //     'parent_id' => $relatorios->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Produtos Mais Vendidos',
-        //     'url'   => '/reports/top-products',
-        //     'parent_id' => $relatorios->id,
-        // ]);
-
-        // Menu::create([
-        //     'title' => 'Análise Financeira',
-        //     'url'   => '/reports/financial',
-        //     'parent_id' => $relatorios->id,
-        // ]);
 
         // ----------------------------
         // Configurações (pai + filhos)
@@ -230,8 +165,6 @@ class MenuSeeder extends Seeder
         ]);
 
         //Cadastrar as permissões iniciais
-
-        DB::table('permissions')->delete();
 
         DB::table('permissions')->insert([
             // MASTER → acesso a tudo
@@ -295,10 +228,8 @@ class MenuSeeder extends Seeder
 
 
         //Registrar permissões
-        DB::table('menu_permission')->delete(); //MenuPermission::delete();
         $menus = Menu::all();
         $groups =  Permission::all(); // grupos de usuário do sistema
-        DB::table('menu_permission')->delete();
         foreach ($menus as $menu) {
             foreach ($groups as $group) {
                 // $keyBase = $this->generateKey($menu);
@@ -332,5 +263,19 @@ class MenuSeeder extends Seeder
             }
         }
 
+    }
+
+    /**
+     * Limpa as tabelas do seeder e reinicia os contadores de auto incremento.
+     */
+    private function resetSeedTables(): void
+    {
+        DB::table('menu_permission')->delete();
+        DB::table('menus')->delete();
+        DB::table('permissions')->delete();
+
+        DB::statement('ALTER TABLE menu_permission AUTO_INCREMENT = 1');
+        DB::statement('ALTER TABLE menus AUTO_INCREMENT = 1');
+        DB::statement('ALTER TABLE permissions AUTO_INCREMENT = 1');
     }
 }
