@@ -419,8 +419,13 @@ class ProductController extends Controller
         if (!$user) {
             return response()->json(['error' => 'Acesso negado'], 403);
         }
-        if (!$this->permissionService->isHasPermission('view')) {
-            return response()->json(['error' => 'Acesso negado'], 403);
+
+        // Se for administrador ou parceiro (permission_id <= partner_id), verifica permissão administrativa
+        // Se for cliente (permission_id > partner_id), permite a visualização (loja)
+        if ($user->permission_id <= $this->partner_id) {
+            if (!$this->permissionService->isHasPermission('view')) {
+                return response()->json(['error' => 'Acesso negado'], 403);
+            }
         }
         //adicionar um função para fazer consulta atraves do slug caso não encontra por id
         $product = Product::where('ID',$id)->first();
@@ -430,9 +435,14 @@ class ProductController extends Controller
         if($product->excluido == 's' || $product->deletado == 's'){
             return response()->json(['error' => 'Produto excluído ou deletado'], 404);
         }
-        //se não encontrar retornar erro 404
+        // Se não encontrar retornar erro 404
         if(!$product){
             return response()->json(['error' => 'Produto não encontrado'], 404);
+        }
+
+        // Se for cliente (permission_id > partner_id), garantir que o produto esteja publicado
+        if ($user->permission_id > $this->partner_id && $product->post_status !== 'publish') {
+            return response()->json(['error' => 'Produto não disponível para visualização'], 404);
         }
 
         // Preparar resposta no formato do frontend

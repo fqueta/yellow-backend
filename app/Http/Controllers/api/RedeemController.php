@@ -505,9 +505,14 @@ class RedeemController extends Controller
                 return response()->json(['error' => 'Acesso negado'], 403);
             }
 
-            // Verificar permissão de visualização
-            if (!$this->permissionService->isHasPermission('view')) {
-                return response()->json(['error' => 'Acesso negado'], 403);
+            // Se for administrador ou parceiro (permission_id <= 5), verifica permissão administrativa
+            // Permission ID 5 é o default para parceiros no sistema. Maiores que isso são clientes.
+            $partner_id = \App\Services\Qlib::qoption('permission_partner_id') ? \App\Services\Qlib::qoption('permission_partner_id') : 5;
+
+            if ($user->permission_id <= $partner_id) {
+                if (!$this->permissionService->isHasPermission('view')) {
+                    return response()->json(['error' => 'Acesso negado'], 403);
+                }
             }
 
             // Converter ID se necessário
@@ -525,6 +530,14 @@ class RedeemController extends Controller
                     'success' => false,
                     'message' => 'Resgate não encontrado'
                 ], 404);
+            }
+
+            // Garante que o cliente só possa ver os próprios resgates
+            if ($user->permission_id > $partner_id && $redemption->user_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Acesso negado ao resgate de outro usuário'
+                ], 403);
             }
 
             // Mapear dados do resgate
