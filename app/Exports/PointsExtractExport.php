@@ -53,6 +53,7 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
                 'p.origem',
                 'p.data_expiracao',
                 'p.created_at',
+                'p.autor',
                 'p.excluido',
                 'p.deletado',
                 'c.name as user_name',
@@ -93,11 +94,16 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
             $query->where(function($q) use ($search) {
                 $q->where('id', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('origem', 'like', "%{$search}%")
                   ->orWhere('user_name', 'like', "%{$search}%")
                   ->orWhere('user_cpf', 'like', "%{$search}%")
                   ->orWhere('user_email', 'like', "%{$search}%")
                   ->orWhere('pedido_id', 'like', "%{$search}%");
             });
+        }
+
+        if (!empty($this->filters['created_by'])) {
+            $query->where('autor', $this->filters['created_by']);
         }
 
         if (!empty($this->filters['type'])) {
