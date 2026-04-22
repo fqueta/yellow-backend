@@ -1131,7 +1131,7 @@ class PointController extends Controller
                   ->orWhere('status', 'expirado');
             });
             // Ignorar registros anteriores a 15/04/2026 conforme solicitação
-            $query->where('created_at', '>=', '2026-04-15 00:00:00');
+            // $query->where('created_at', '>=', '2026-04-15 00:00:00');
         } elseif ($type) {
             $query->where('tipo', $type);
         }
