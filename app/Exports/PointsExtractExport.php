@@ -106,6 +106,8 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
                 $query->where(function($q) {
                     $q->where('tipo', 'expired')->orWhere('status', 'expirado');
                 });
+                // Ignorar registros anteriores a 15/04/2026 conforme solicitação
+                $query->where('created_at', '>=', '2026-04-15 00:00:00');
             } else {
                 $query->where('tipo', $type);
             }
@@ -125,6 +127,11 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
 
         if (!empty($this->filters['user_id'])) {
             $query->where('client_id', $this->filters['user_id']);
+        }
+
+        if (!empty($this->filters['exclude_legacy']) && $this->filters['exclude_legacy'] === 'true') {
+            $query->whereRaw("COALESCE(origem, '') != 'migracao_legado'")
+                  ->whereRaw("COALESCE(pedido_id, '') != 'migracao_legado'");
         }
     }
 

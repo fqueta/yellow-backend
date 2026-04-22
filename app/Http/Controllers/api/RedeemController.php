@@ -240,7 +240,7 @@ class RedeemController extends Controller
             $categoryName = $request->input('category');
 
             // Query base com relacionamentos
-            $query = Redemption::with(['product', 'user'])
+            $query = Redemption::with(['product', 'user', 'statusHistory'])
                 ->ativos()
                 ->orderBy($orderBy, $order)
                 ->where('excluido', 'n');
@@ -291,9 +291,12 @@ class RedeemController extends Controller
             // Buscar com paginação
             $redemptions = $query->paginate($perPage, ['*'], 'page', $page);
 
+            // Cache local de categorias para evitar múltiplas consultas ao banco no loop
+            $categoryCache = [];
+
             // Mapear dados para o formato solicitado
-            $mappedRedemptions = $redemptions->getCollection()->map(function ($redemption) {
-                return $this->mapRedemptionData($redemption);
+            $mappedRedemptions = $redemptions->getCollection()->map(function ($redemption) use (&$categoryCache) {
+                return $this->mapRedemptionData($redemption, $categoryCache);
             });
 
             // Preparar resposta com paginação
@@ -344,7 +347,7 @@ class RedeemController extends Controller
     /**
      * Mapeia os dados do resgate para o formato da API
      */
-    private function mapRedemptionData($redemption)
+    private function mapRedemptionData($redemption, &$categoryCache = [])
     {
         $product = $redemption->product;
         $user = $redemption->user;
@@ -370,11 +373,15 @@ class RedeemController extends Controller
         if ($product) {
             // Obter dados da categoria apenas se guid não for null
             if (!empty($product->guid)) {
-                try {
-                    $categoryData = Qlib::get_category_by_id($product->guid);
-                } catch (\Exception $e) {
-                    $categoryData = null;
+                $guid = $product->guid;
+                if (!isset($categoryCache[$guid])) {
+                    try {
+                        $categoryCache[$guid] = Qlib::get_category_by_id($guid);
+                    } catch (\Exception $e) {
+                        $categoryCache[$guid] = null;
+                    }
                 }
+                $categoryData = $categoryCache[$guid];
             }
 
             // Obter imagem do produto

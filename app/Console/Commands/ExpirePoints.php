@@ -175,6 +175,7 @@ class ExpirePoints extends Command
             ->where('deletado', 'n')
             ->whereNotNull('data_expiracao')
             ->where('data_expiracao', '<=', now()->toDateString())
+            ->whereRaw('valor > valor_usado') // Filtro crítico: apenas o que ainda tem saldo
             ->get();
 
         $totalProcessados = 0;
@@ -183,26 +184,24 @@ class ExpirePoints extends Command
         foreach ($pontosParaExpirar as $ponto) {
             $saldoRestante = (float) $ponto->valor - (float) $ponto->valor_usado;
 
-            if ($saldoRestante > 0) {
-                // Criar um DÉBITO de expiração para registrar no extrato e baixar o saldo total
-                Point::create([
-                    'client_id' => $ponto->client_id,
-                    'valor' => -$saldoRestante,
-                    'tipo' => 'expired',
-                    'origem' => 'expiracao',
-                    'status' => 'expirado',
-                    'description' => "[EXPIRAÇÃO] Saldo expirado por validade (Ref. Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
-                    'data' => now()->toDateString(),
-                    'data_expiracao' => $ponto->data_expiracao, // Copia para fins de histórico e exibição no extrato
-                    'config' => [
-                        'batch_id' => $batchId,
-                        'referencia_credito_id' => $ponto->id,
-                        'valor_original_credito' => $ponto->valor,
-                        'valor_expirado' => $saldoRestante
-                    ]
-                ]);
-                $totalLancamentosExtrato++;
-            }
+            // Criar um DÉBITO de expiração para registrar no extrato e baixar o saldo total
+            Point::create([
+                'client_id' => $ponto->client_id,
+                'valor' => -$saldoRestante,
+                'tipo' => 'expired',
+                'origem' => 'expiracao',
+                'status' => 'expirado',
+                'description' => "[EXPIRAÇÃO] Saldo expirado por validade (Ref. Crédito #{$ponto->id} de " . $ponto->data->format('d/m/Y') . ")",
+                'data' => now()->toDateString(),
+                'data_expiracao' => $ponto->data_expiracao, // Copia para fins de histórico e exibição no extrato
+                'config' => [
+                    'batch_id' => $batchId,
+                    'referencia_credito_id' => $ponto->id,
+                    'valor_original_credito' => $ponto->valor,
+                    'valor_expirado' => $saldoRestante
+                ]
+            ]);
+            $totalLancamentosExtrato++;
 
             // Marcar o crédito original como expirado e zerar o saldo "disponível" dele
             $ponto->update([

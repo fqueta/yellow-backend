@@ -219,6 +219,8 @@ class PointController extends Controller
             if ($typeParam === 'expired') {
                 // Registros de expiração: tipo = 'expired'
                 $query->where('tipo', 'expired');
+                // Ignorar registros anteriores a 15/04/2026 conforme solicitação
+                $query->where('created_at', '>=', '2026-04-15 00:00:00');
             } elseif (in_array($typeParam, ['credito', 'debito'])) {
                 $query->where('tipo', $typeParam);
             }
@@ -230,6 +232,11 @@ class PointController extends Controller
 
         if ($request->has('origem')) {
             $query->where('origem', 'like', "%{$request->origem}%");
+        }
+
+        if ($request->get('exclude_legacy') === 'true') {
+            $query->whereRaw("COALESCE(origem, '') != 'migracao_legado'")
+                  ->whereRaw("COALESCE(pedido_id, '') != 'migracao_legado'");
         }
 
         if ($request->has('data_inicio') && $request->has('data_fim')) {
@@ -476,6 +483,15 @@ class PointController extends Controller
         }
 
         $point = Point::findOrFail($id);
+
+        // Verifica se a origem é migracao_legado para permitir a exclusão conforme solicitado
+        // Se não for migracao_legado, podemos manter a lógica atual ou restringir.
+        // O usuário pediu especificamente suporte para remover estes.
+        if ($point->origem !== 'migracao_legado' && !$this->permissionService->isHasPermission('delete_any_point')) {
+             // Se quiser ser restritivo:
+             // return response()->json(['error' => 'Apenas registros de migração legada podem ser removidos.'], 403);
+        }
+
         $point->delete();
 
         return response()->json([
@@ -1114,6 +1130,8 @@ class PointController extends Controller
                 $q->where('tipo', 'expired')
                   ->orWhere('status', 'expirado');
             });
+            // Ignorar registros anteriores a 15/04/2026 conforme solicitação
+            $query->where('created_at', '>=', '2026-04-15 00:00:00');
         } elseif ($type) {
             $query->where('tipo', $type);
         }
@@ -1121,6 +1139,11 @@ class PointController extends Controller
         // Filtro por status (ativo, expirado, usado, cancelado)
         if ($status && in_array($status, ['ativo', 'expirado', 'usado', 'cancelado'])) {
             $query->where('status', $status);
+        }
+
+        // Filtro por autor (quem criou o registro)
+        if ($request->has('created_by')) {
+            $query->where('autor', $request->created_by);
         }
 
         // Filtro por período
@@ -1134,6 +1157,12 @@ class PointController extends Controller
         // Filtro por lote de expiração (batch_id)
         if ($request->has('batch_id')) {
             $query->where('config->batch_id', $request->batch_id);
+        }
+
+        // Filtro para ocultar registros de migração legada
+        if ($request->get('exclude_legacy') === 'true') {
+            $query->whereRaw("COALESCE(origem, '') != 'migracao_legado'")
+                  ->whereRaw("COALESCE(pedido_id, '') != 'migracao_legado'");
         }
 
         // Busca por nome, email, descrição ou ID
@@ -1174,21 +1203,55 @@ class PointController extends Controller
         // Extrair a coleção de dados
         $collection = $isExport ? $pointsFetched : $pointsFetched->getCollection();
 
-        // Mapear dados para o formato solicitado
-        $mappedData = $collection->map(function ($point) {
-            // Usar relacionamento carregado (eager loading)
-            $user = $point->cliente;
+        // Otimização: Pré-calcular os saldos iniciais para evitar N+1 queries
+        $clientIds = $collection->pluck('client_id')->unique();
+        $minCreatedAt = $collection->min('created_at');
+        
+        $initialBalances = [];
+        if ($collection->isNotEmpty()) {
+            $initialBalances = Point::whereIn('client_id', $clientIds)
+                ->where('created_at', '<', $minCreatedAt)
+                ->where('excluido', 'n')
+                ->where('deletado', 'n')
+                ->where('status', '!=', 'cancelado')
+                ->select('client_id', DB::raw("SUM(CASE WHEN tipo = 'credito' THEN valor ELSE -ABS(valor) END) as total"))
+                ->groupBy('client_id')
+                ->pluck('total', 'client_id')
+                ->toArray();
+        }
 
-            // Calcular saldo antes e depois da transação
-            $balanceBefore = $this->calculateBalanceBefore($point);
-            $balanceAfter = $this->calculateBalanceAfter($point);
+        // Criar um histórico de mudanças por cliente para calcular o saldo corrente
+        $runningBalances = [];
+        foreach ($clientIds as $cid) {
+            $runningBalances[$cid] = (float)($initialBalances[$cid] ?? 0);
+        }
 
-            // Determinar tipo para o frontend
-            $frontendType = 'adjustment';
+        // Processar os itens em ordem cronológica (ASC) para preencher os saldos corretamente
+        $pointsWithBalances = [];
+        $pointsSorted = $collection->sortBy('created_at');
+        
+        foreach ($pointsSorted as $point) {
+            $balanceBefore = $runningBalances[$point->client_id];
+            $change = (float)$point->valor;
+            $balanceAfter = $balanceBefore + $change;
             
+            $pointsWithBalances[$point->id] = [
+                'before' => $balanceBefore,
+                'after' => $balanceAfter
+            ];
+            
+            $runningBalances[$point->client_id] = $balanceAfter;
+        }
+
+        // Mapear dados para o formato solicitado
+        $mappedData = $collection->map(function ($point) use ($pointsWithBalances) {
+            $user = $point->cliente; // Já carregado via with()
+            $balances = $pointsWithBalances[$point->id] ?? ['before' => 0, 'after' => 0];
+
+            $frontendType = 'adjustment';
             if ($point->origem === 'migracao_legado') {
                 $frontendType = 'migration';
-            } elseif ($point->tipo === 'expired') {
+            } elseif ($point->tipo === 'expired' || $point->tipo === 'expiracao' || $point->status === 'expirado') {
                 $frontendType = 'expired';
             } elseif ($point->tipo === 'credito') {
                 $frontendType = 'earned';
@@ -1212,8 +1275,8 @@ class PointController extends Controller
                 'saldo_restante' => (float) ($point->saldo_restante ?? $point->valor),
                 'description' => $point->description ?? 'Via API',
                 'reference' => $point->pedido_id ?? $point->origem ?? null,
-                'balanceBefore' => (int) $balanceBefore,
-                'balanceAfter' => (int) $balanceAfter,
+                'balanceBefore' => (int) $balances['before'],
+                'balanceAfter' => (int) $balances['after'],
                 'expirationDate' => $point->data_expiracao ? Carbon::parse($point->data_expiracao)->toISOString() : null,
                 'status' => $point->status,
                 'createdAt' => Carbon::parse($point->created_at)->toISOString(),
@@ -1354,15 +1417,29 @@ class PointController extends Controller
             if ($carbonFrom) $baseQuery->where('created_at', '>=', $carbonFrom);
             if ($carbonTo) $baseQuery->where('created_at', '<=', $carbonTo);
 
-            // Aplica filtro de pesquisa se houver
+            // Aplica filtro de pesquisa se houver (sincronizado com getPointsExtracts)
             if ($search) {
                 $baseQuery->where(function($q) use ($search) {
                     $q->where('id', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%")
+                      ->orWhere('origem', 'like', "%{$search}%")
                       ->orWhere('pedido_id', 'like', "%{$search}%")
-                      ->orWhere('client_id', 'like', "%{$search}%");
-                    // Omitir orWhereHas('cliente') temporariamente para performance se for lento
+                      ->orWhereHas('cliente', function($clienteQuery) use ($search) {
+                          $clienteQuery->where('name', 'like', "%{$search}%")
+                                      ->orWhere('email', 'like', "%{$search}%");
+                      });
                 });
+            }
+
+            // Filtro para ocultar registros de migração legada nas estatísticas
+            if ($request->get('exclude_legacy') === 'true') {
+                $baseQuery->whereRaw("COALESCE(origem, '') != 'migracao_legado'")
+                          ->whereRaw("COALESCE(pedido_id, '') != 'migracao_legado'");
+            }
+
+            // Filtro por autor (quem criou o registro) nas estatísticas
+            if ($request->has('created_by')) {
+                $baseQuery->where('autor', $request->created_by);
             }
 
             // Filtro por expired
@@ -1384,7 +1461,7 @@ class PointController extends Controller
                 ->when($isExpiredFilter, function($q) {
                     return $q->where(function($sq) {
                         $sq->where('tipo', 'expired')->orWhere('status', 'expirado');
-                    });
+                    })->where('created_at', '>=', '2026-04-15 00:00:00');
                 })
                 ->first();
 
