@@ -5,6 +5,10 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Models\Point;
 use App\Models\User;
+use App\Exports\PointsExtractExport;
+use App\Exports\PointsBalancesReportExport;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
 use App\Services\PermissionService;
 use App\Services\Qlib;
 use Illuminate\Http\Request;
@@ -811,29 +815,18 @@ class PointController extends Controller
      */
     private function calculateBalanceBefore($transaction)
     {
-        $previousTransactions = Point::where('client_id', $transaction->client_id)
-                                   ->where(function ($query) use ($transaction) {
-                                       $query->where('created_at', '<', $transaction->created_at)
-                                             ->orWhere(function ($q) use ($transaction) {
-                                                 $q->where('created_at', '=', $transaction->created_at)
-                                                   ->where('id', '<', $transaction->id);
-                                             });
-                                   })
-                                   ->where('excluido', 'n')
-                                   ->where('deletado', 'n')
-                                   ->where('status', '!=', 'cancelado')
-                                   ->get();
-
-        $balance = 0;
-        foreach ($previousTransactions as $prev) {
-            if ($prev->tipo === 'credito') {
-                $balance += $prev->valor;
-            } else {
-                $balance -= abs($prev->valor);
-            }
-        }
-
-        return $balance;
+        return (float) Point::where('client_id', $transaction->client_id)
+            ->where(function ($query) use ($transaction) {
+                $query->where('created_at', '<', $transaction->created_at)
+                      ->orWhere(function ($q) use ($transaction) {
+                          $q->where('created_at', '=', $transaction->created_at)
+                            ->where('id', '<', $transaction->id);
+                      });
+            })
+            ->where('excluido', 'n')
+            ->where('deletado', 'n')
+            ->where('status', '!=', 'cancelado')
+            ->sum('valor');
     }
 
     /**
@@ -1065,6 +1058,12 @@ class PointController extends Controller
         // Parâmetros de entrada
         $page = $request->get('page', 1);
         $perPage = $request->get('per_page', 15);
+        
+        // Aumentar tempo de execução para exportações
+        if ($request->get('export') === 'true') {
+            set_time_limit(300);
+            $perPage = 5000; // Limite alto para exportação se necessário
+        }
         $search = $request->get('search');
         $type = $request->get('type'); // credito, debito ou expired
         $userId = $request->get('user_id');
@@ -1096,8 +1095,8 @@ class PointController extends Controller
             ], 400);
         }
 
-        // Construir query
-        $query = Point::query();
+        // Construir query com relacionamentos carregados (Eager Loading)
+        $query = Point::with(['cliente', 'usuario']);
         //desconsidera pontos com excluido=s
         $query->where('excluido', '!=', 's');
         //caso seja um usuario com permissão maior que 5 (parceiros ou menores) listar apenas pontos em que autor = autor_id
@@ -1162,13 +1161,23 @@ class PointController extends Controller
             $query->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
-        // Executar query com paginação
-        $points = $query->paginate($perPage, ['*'], 'page', $page);
-        // dd($points);
+        // Determinar se é uma exportação (retornar todos os registros sem paginação)
+        $isExport = $request->get('export') === 'true';
+
+        // Executar query
+        if ($isExport) {
+            $pointsFetched = $query->get();
+        } else {
+            $pointsFetched = $query->paginate($perPage, ['*'], 'page', $page);
+        }
+
+        // Extrair a coleção de dados
+        $collection = $isExport ? $pointsFetched : $pointsFetched->getCollection();
+
         // Mapear dados para o formato solicitado
-        $mappedData = $points->getCollection()->map(function ($point) {
-            // Buscar dados do usuário
-            $user = User::find($point->client_id);
+        $mappedData = $collection->map(function ($point) {
+            // Usar relacionamento carregado (eager loading)
+            $user = $point->cliente;
 
             // Calcular saldo antes e depois da transação
             $balanceBefore = $this->calculateBalanceBefore($point);
@@ -1191,8 +1200,6 @@ class PointController extends Controller
                 $frontendType = 'refund';
             }
 
-
-
             return [
                 'id' => (string) $point->id,
                 'userId' => (string) $point->client_id,
@@ -1213,25 +1220,58 @@ class PointController extends Controller
                 'createdBy' => $point->autor ? (string) $point->autor : null
             ];
         });
-        // dd($mappedData);
+
+        if ($isExport) {
+            return response()->json([
+                'success' => true,
+                'data' => $mappedData,
+                'total' => $mappedData->count()
+            ]);
+        }
+
         // Preparar resposta com metadados de paginação
         return response()->json([
             'success' => true,
             'data' => $mappedData,
             'pagination' => [
-                'current_page' => $points->currentPage(),
-                'per_page' => $points->perPage(),
-                'total' => $points->total(),
-                'last_page' => $points->lastPage(),
-                'from' => $points->firstItem(),
-                'to' => $points->lastItem(),
-                'has_more_pages' => $points->hasMorePages(),
-                'next_page_url' => $points->nextPageUrl(),
-                'prev_page_url' => $points->previousPageUrl(),
-                'total_pages' => $points->lastPage(),
+                'current_page' => $pointsFetched->currentPage(),
+                'per_page' => $pointsFetched->perPage(),
+                'total' => $pointsFetched->total(),
+                'last_page' => $pointsFetched->lastPage(),
+                'from' => $pointsFetched->firstItem(),
+                'to' => $pointsFetched->lastItem(),
+                'has_more_pages' => $pointsFetched->hasMorePages(),
+                'next_page_url' => $pointsFetched->nextPageUrl(),
+                'prev_page_url' => $pointsFetched->previousPageUrl(),
+                'total_pages' => $pointsFetched->lastPage(),
             ]
         ]);
     }
+    /**
+     * Exporta os extratos de pontos para um arquivo Excel (XLSX)
+     * Utiliza processamento no backend para suportar grandes volumes.
+     */
+    public function exportToFile(Request $request)
+    {
+        $filters = $request->all();
+        $date = now()->format('Y-m-d_His');
+        $fileName = "extratos_pontos_{$date}.xlsx";
+
+        return Excel::download(new PointsExtractExport($filters), $fileName);
+    }
+
+    /**
+     * Exporta o relatório de saldo de pontos por cliente para Excel (XLSX)
+     */
+    public function exportBalancesReportToFile(Request $request)
+    {
+        $filters = $request->all();
+        $date = now()->format('Y-m-d_His');
+        $fileName = "relatorio_saldo_pontos_{$date}.xlsx";
+
+        return Excel::download(new PointsBalancesReportExport($filters), $fileName);
+    }
+
     /**Metoodo para marcar pontos como excluido no extrato de pontos deve localizar registro pelo pedido_id tambem */
     /**
      * Excluir um ponto do extrato de pontos
@@ -1290,136 +1330,77 @@ class PointController extends Controller
         $user = $request->user();
 
         try {
+            // Aumentar tempo de execução para garantir carregamento inicial
+            set_time_limit(180);
+
             // Total de transações (respeita filtro de tipo quando fornecido)
-            $type = $request->get('type'); // "credito", "debito" ou "expired"
+            $type = $request->get('type');
             $dateFrom = $request->get('dateFrom') ?? $request->get('date_from');
             $dateTo   = $request->get('dateTo')   ?? $request->get('date_to');
             $search   = $request->get('search');
 
-            // Validar tipo quando informado
-            if ($type && !in_array($type, ['credito', 'debito', 'expired', 'expiracao'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Parâmetro "type" inválido. Use "credito", "debito" ou "expired".'
-                ], 422);
-            }
+            // Preparar datas formatadas para evitar parse redundante
+            $carbonFrom = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : null;
+            $carbonTo = $dateTo ? Carbon::parse($dateTo)->endOfDay() : null;
 
             // Query base considerando permissões e registros não excluídos
-            $baseQuery = Point::query()
-                ->where('excluido', '!=', 's')
-                ->where(function ($q) {
-                    $q->whereNull('origem')->orWhere('origem', '!=', 'migracao_legado');
-                });
+            $baseQuery = Point::query()->where('excluido', '!=', 's');
 
             if ($user && $user->permission_id > $this->partner_id) {
-                // Ajustado para 'autor' para manter consistência com o getPointsExtracts
                 $baseQuery->where('autor', $user->id);
             }
 
-            // Aplicar filtros de período
-            if ($dateFrom) {
-                $baseQuery->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
-            }
-            if ($dateTo) {
-                $baseQuery->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
-            }
+            // Aplicar filtros de período na query base
+            if ($carbonFrom) $baseQuery->where('created_at', '>=', $carbonFrom);
+            if ($carbonTo) $baseQuery->where('created_at', '<=', $carbonTo);
 
             // Aplica filtro de pesquisa se houver
             if ($search) {
                 $baseQuery->where(function($q) use ($search) {
                     $q->where('id', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%")
-                      ->orWhere('origem', 'like', "%{$search}%")
                       ->orWhere('pedido_id', 'like', "%{$search}%")
-                      ->orWhereHas('cliente', function($clienteQuery) use ($search) {
-                          $clienteQuery->where('name', 'like', "%{$search}%")
-                                      ->orWhere('email', 'like', "%{$search}%");
-                      });
+                      ->orWhere('client_id', 'like', "%{$search}%");
+                    // Omitir orWhereHas('cliente') temporariamente para performance se for lento
                 });
             }
 
-            // Se filtro por expired, aplicar na query base (transações ou créditos vencidos)
+            // Filtro por expired
             $isExpiredFilter = ($type === 'expired' || $type === 'expiracao');
-            if ($isExpiredFilter) {
-                $baseQuery->where(function($q) {
-                    $q->where('tipo', 'expired')
-                      ->orWhere('status', 'expirado');
-                });
-            }
 
-            // Total de transações (respeita filtro de tipo quando fornecido)
-            $transactionsQuery = clone $baseQuery;
-            if ($type && !$isExpiredFilter) {
-                $transactionsQuery->where('tipo', $type);
-            }
-            $totalTransactions = (int) $transactionsQuery->count();
+            // Executar agregações principais em uma única query
+            $stats = (clone $baseQuery)
+                ->selectRaw("
+                    COUNT(*) as total_transactions,
+                    SUM(CASE WHEN tipo = 'credito' THEN valor ELSE 0 END) as total_earned,
+                    SUM(CASE WHEN tipo IN ('debito', 'expired', 'expiracao') THEN ABS(valor) ELSE 0 END) as total_redeemed,
+                    SUM(CASE WHEN tipo = 'expired' OR status = 'expirado' THEN ABS(valor) ELSE 0 END) as total_expired,
+                    COUNT(DISTINCT client_id) as active_users,
+                    SUM(valor) as total_balance
+                ")
+                ->when($type && !$isExpiredFilter, function($q) use ($type) {
+                    return $q->where('tipo', $type);
+                })
+                ->when($isExpiredFilter, function($q) {
+                    return $q->where(function($sq) {
+                        $sq->where('tipo', 'expired')->orWhere('status', 'expirado');
+                    });
+                })
+                ->first();
 
-            // Total de pontos ganhos (crédito)
-            if ($type === 'debito') {
-                $totalEarned = 0; // escopo filtrado por débito
-            } else {
-                $earnedQuery = clone $baseQuery;
-                if (!$isExpiredFilter) {
-                    $earnedQuery->where('tipo', 'credito');
-                }
-                $totalEarned = (int) $earnedQuery->sum('valor');
-            }
-
-            // Total de pontos resgatados (débito)
-            if ($type === 'credito' || $isExpiredFilter) {
-                $totalRedeemed = 0; // escopo filtrado por crédito ou expirados
-            } else {
-                $redeemedQuery = clone $baseQuery;
-                $redeemedQuery->where('tipo', 'debito');
-                $totalRedeemed = abs((int) $redeemedQuery->sum('valor')); // Aplicado abs() para tratar valores negativos
-            }
-
-            // Total de pontos expirados (saldo real que expirou = valor - valor_usado)
-            if ($type === 'debito') {
-                $totalExpired = 0; // não há expiração para débitos
-            } elseif ($isExpiredFilter) {
-                // Já está filtrado por expirados: soma o saldo que realmente expirou
-                $totalExpired = (int) (clone $baseQuery)
-                    ->where('tipo', 'expired')
-                    ->sum(DB::raw('ABS(valor)'));
-
-                // Fallback: se não há registros tipo 'expired', usa créditos com status='expirado'
-                if ($totalExpired === 0) {
-                    $totalExpired = (int) (clone $baseQuery)
-                        ->where('tipo', 'credito')
-                        ->where('status', 'expirado')
-                        ->sum(DB::raw('valor - valor_usado'));
-                }
-            } else {
-                // Sem filtro de tipo: soma todos os registros de expiração reais (tipo=expired)
-                $expiredQuery = clone $baseQuery;
-                $totalExpired = (int) $expiredQuery
-                    ->where('tipo', 'expired')
-                    ->sum(DB::raw('ABS(valor)'));
-
-                // Fallback: créditos marcados como expirados que não têm registro 'expired' separado
-                if ($totalExpired === 0) {
-                    $expiredQuery2 = clone $baseQuery;
-                    $totalExpired = (int) $expiredQuery2
-                        ->where('tipo', 'credito')
-                        ->where('status', 'expirado')
-                        ->sum(DB::raw('valor - valor_usado'));
-                }
-            }
-
-            // Usuários ativos (com pelo menos uma transação no escopo)
-            $activeUsersQuery = clone $baseQuery;
-            if ($type && !$isExpiredFilter) {
-                $activeUsersQuery->where('tipo', $type);
-            }
-            $activeUsers = (int) $activeUsersQuery->distinct('client_id')->count('client_id');
-
-            // Saldo matemático total gerado pelos itens atuais listados
-            $balanceQuery = clone $baseQuery;
-            if ($type && !$isExpiredFilter) {
-                $balanceQuery->where('tipo', $type);
-            }
-            $totalBalance = (float) $balanceQuery->sum(\Illuminate\Support\Facades\DB::raw("CASE WHEN tipo = 'credito' THEN valor ELSE -ABS(valor) END"));
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'totalTransactions' => (int) $stats->total_transactions,
+                    'totalEarned' => (int) $stats->total_earned,
+                    'totalRedeemed' => (int) $stats->total_redeemed,
+                    'totalExpired' => (int) $stats->total_expired,
+                    'activeUsers' => (int) $stats->active_users,
+                    'totalBalance' => (float) $stats->total_balance,
+                    'totalAdjustments' => (int) (clone $baseQuery)->where('origem', 'ajuste')->count(),
+                    'totalRefunds' => (int) (clone $baseQuery)->where('tipo', 'refund')->count(),
+                ]
+            ]);
 
             // Total de ajustes (origem/descrição sugerindo ajuste)
             $adjustmentsQuery = clone $baseQuery;

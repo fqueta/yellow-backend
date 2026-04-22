@@ -176,6 +176,8 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::post('points/expirar', [PointController::class, 'expirarPontos'])->name('points.expirarPontos');
         Route::get('admin/users/{userId}/points-balance', [PointController::class, 'getUserPointsBalance'])->name('admin.users.points-balance');
         Route::get('admin/points-extracts', [PointController::class, 'getPointsExtracts'])->name('admin.points-extracts');
+        Route::get('admin/points-extracts/export-xlsx', [PointController::class, 'exportToFile'])->name('admin.points-extracts.export');
+        Route::get('admin/points-balances/export-xlsx', [PointController::class, 'exportBalancesReportToFile'])->name('admin.points-balances.export');
         Route::get('admin/points-extracts/stats', [PointController::class, 'getPointsExtractsStats'])->name('admin.points-extracts.stats');
         // User self-service points balance
         Route::get('user/points/balance', [PointController::class, 'getAuthenticatedUserBalance']);
@@ -259,6 +261,7 @@ Route::name('api.')->prefix('api/v1')->middleware([
         Route::get('point-store/redemptions', [ProductController::class, 'getUserRedemptions'])->name('products.user-redemptions');
         Route::get('point-store/redemptions/{id}', [RedeemController::class, 'show'])->name('point-store.redemptions.show');
         Route::get('admin/redemptions', [RedeemController::class, 'index'])->name('admin.redemptions');
+        Route::get('admin/redemptions/export-xlsx', [RedeemController::class, 'exportToFile'])->name('admin.redemptions.export');
         Route::patch('admin/redemptions/{id}/status', [RedeemController::class, 'updateStatus'])->name('admin.redemptions.update-status');
         Route::patch('admin/redemptions/{id}/refund', [RedeemController::class, 'refund'])->name('admin.redemptions.refund');
         //rota para deletar um resgate

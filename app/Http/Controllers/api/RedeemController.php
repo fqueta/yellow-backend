@@ -16,6 +16,8 @@ use App\Services\Qlib;
 use App\Jobs\SendRedemptionStatusUpdateNotification;
 use App\Jobs\SendRedemptionNotification;
 use App\Models\Product;
+use App\Exports\RedemptionsExport;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -325,6 +327,18 @@ class RedeemController extends Controller
                 'message' => 'Erro ao buscar resgates: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Exporta os resgates (pedidos) para um arquivo Excel (XLSX)
+     */
+    public function exportToFile(Request $request)
+    {
+        $filters = $request->all();
+        $date = now()->format('Y-m-d_His');
+        $fileName = "pedidos_resgate_{$date}.xlsx";
+
+        return Excel::download(new RedemptionsExport($filters), $fileName);
     }
 
     /**
