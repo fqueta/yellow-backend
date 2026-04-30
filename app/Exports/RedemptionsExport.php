@@ -25,22 +25,22 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     public function collection()
     {
-        $query = DB::table('redims as r')
+        $query = DB::table('redemptions as r')
             ->select(
                 'r.id',
-                'r.config',
+                'r.points_used',
                 'r.status',
                 'r.created_at',
                 'u.name as user_name',
                 'u.email as user_email',
                 'u.cpf as user_cpf',
-                'u.phone as user_phone',
-                'p.nome as product_name',
-                'c.nome as product_category'
+                'u.config as user_config',
+                'p.post_title as product_name',
+                'c.name as product_category'
             )
-            ->leftJoin('users as u', 'u.id', '=', 'r.client_id')
-            ->leftJoin('products as p', 'p.id', '=', 'r.produto_id')
-            ->leftJoin('categories as c', 'c.id', '=', 'p.categoria_id')
+            ->leftJoin('users as u', 'u.id', '=', 'r.user_id')
+            ->leftJoin('posts as p', 'p.ID', '=', 'r.product_id')
+            ->leftJoin('categories as c', 'c.id', '=', 'p.guid')
             ->where('r.excluido', 'n');
 
         // Filtros
@@ -53,7 +53,7 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
             $query->where(function($q) use ($search) {
                 $q->where('u.name', 'like', "%{$search}%")
                   ->orWhere('u.email', 'like', "%{$search}%")
-                  ->orWhere('p.nome', 'like', "%{$search}%")
+                  ->orWhere('p.post_title', 'like', "%{$search}%")
                   ->orWhere('r.id', 'like', "%{$search}%");
             });
         }
@@ -86,17 +86,17 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
     public function map($row): array
     {
-        $config = json_decode($row->config, true) ?? [];
-        $pointsUsed = $config['pontos_usados'] ?? 0;
-        
+        $config = json_decode($row->user_config, true) ?? [];
+        $phone = $config['celular'] ?? $config['phone'] ?? $config['telefone'] ?? '';
+
         return [
             $row->id,
             $row->user_name,
             $row->user_email,
-            $row->user_phone,
+            $phone,
             $row->product_name,
             $row->product_category,
-            (float) $pointsUsed,
+            (float) $row->points_used,
             Carbon::parse($row->created_at)->format('d/m/Y H:i'),
             $this->formatStatus($row->status),
         ];
