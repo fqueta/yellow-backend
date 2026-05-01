@@ -88,12 +88,15 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
     {
         $config = json_decode($row->user_config, true) ?? [];
         $phone = $config['celular'] ?? $config['phone'] ?? $config['telefone'] ?? '';
+        
+        // Formatar telefone apenas com números, sem notação científica
+        $phoneDigits = preg_replace('/\D/', '', $phone);
 
         return [
             $row->id,
             $row->user_name,
             $row->user_email,
-            $phone,
+            $phoneDigits ? ' ' . $phoneDigits : '', // Espaço na frente força o Excel a tratar como string
             $row->product_name,
             $row->product_category,
             (float) $row->points_used,
