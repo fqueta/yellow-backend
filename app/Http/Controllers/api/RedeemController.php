@@ -337,7 +337,14 @@ class RedeemController extends Controller
      */
     public function exportToFile(Request $request)
     {
+        $user = $request->user();
         $filters = $request->all();
+
+        // Aplicar a mesma trava de segurança da listagem
+        if ($user && (int)$user->permission_id >= 6) {
+            $filters['autor'] = $user->id;
+        }
+
         $date = now()->format('Y-m-d_His');
         $fileName = "pedidos_resgate_{$date}.xlsx";
 

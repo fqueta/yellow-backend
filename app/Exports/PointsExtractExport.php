@@ -9,6 +9,8 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -19,7 +21,7 @@ use Carbon\Carbon;
  * Utiliza o banco de dados (MariaDB Window Functions) para cálculos complexos,
  * evitando o problema de performance N+1.
  */
-class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
 {
     protected $filters;
 
@@ -208,6 +210,14 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
     {
         return [
             1 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']]],
+        ];
+    }
+
+    public function columnFormats(): array
+    {
+        return [
+            'C' => NumberFormat::FORMAT_TEXT, // CPF
+            'A' => NumberFormat::FORMAT_TEXT, // ID
         ];
     }
 }

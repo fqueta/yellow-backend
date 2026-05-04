@@ -101,6 +101,8 @@ class PointsBalancesReportExport implements FromCollection, WithHeadings, WithMa
     public function columnFormats(): array
     {
         return [
+            'A' => NumberFormat::FORMAT_TEXT, // ID
+            'D' => NumberFormat::FORMAT_TEXT, // CPF/CNPJ
             'F' => NumberFormat::FORMAT_NUMBER_COMMA_SEPARATED1,
         ];
     }

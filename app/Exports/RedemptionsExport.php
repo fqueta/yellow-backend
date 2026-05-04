@@ -8,13 +8,16 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 
 /**
  * Classe de exportação de Pedidos de Resgate (Pedidos)
  */
-class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
 {
     protected $filters;
 
@@ -48,6 +51,10 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
             $query->where('r.status', $this->filters['status']);
         }
 
+        if (!empty($this->filters['autor'])) {
+            $query->where('r.autor', $this->filters['autor']);
+        }
+
         if (!empty($this->filters['search'])) {
             $search = $this->filters['search'];
             $query->where(function($q) use ($search) {
@@ -64,6 +71,19 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
 
         if (!empty($this->filters['dateTo'])) {
             $query->where('r.created_at', '<=', Carbon::parse($this->filters['dateTo'])->endOfDay());
+        }
+
+        // Filtro por categoria do produto
+        if (!empty($this->filters['category']) && $this->filters['category'] !== 'all') {
+            $categoryName = $this->filters['category'];
+            $categoryIds = DB::table('categories')->where('name', $categoryName)->pluck('id');
+            
+            if ($categoryIds->isNotEmpty()) {
+                $query->whereIn('p.guid', $categoryIds);
+            } else {
+                // Se informou categoria mas não existe, força resultado vazio
+                $query->whereRaw('1 = 0');
+            }
         }
 
         return $query->orderBy('r.created_at', 'desc')->get();
@@ -89,14 +109,15 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
         $config = json_decode($row->user_config, true) ?? [];
         $phone = $config['celular'] ?? $config['phone'] ?? $config['telefone'] ?? '';
         
-        // Formatar telefone apenas com números, sem notação científica
+        // Formatar telefone apenas com números, garantindo que o Excel trate como string nativa
         $phoneDigits = preg_replace('/\D/', '', $phone);
+        // Em vez de adicionar espaço, deixamos apenas os dígitos, mas usaremos WithColumnFormatting
 
         return [
             $row->id,
             $row->user_name,
             $row->user_email,
-            $phoneDigits ? ' ' . $phoneDigits : '', // Espaço na frente força o Excel a tratar como string
+            $phoneDigits, // Sem espaço aqui, vamos formatar a coluna inteira
             $row->product_name,
             $row->product_category,
             (float) $row->points_used,
@@ -123,6 +144,13 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
     {
         return [
             1 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']]],
+        ];
+    }
+
+    public function columnFormats(): array
+    {
+        return [
+            'D' => NumberFormat::FORMAT_TEXT, // Força a coluna D (Telefone) a ser tratada como TEXTO puro no MS Excel
         ];
     }
 }
