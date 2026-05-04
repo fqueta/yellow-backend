@@ -7,19 +7,23 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithEvents;
+
+use Maatwebsite\Excel\Events\AfterSheet;
+
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 
 /**
  * Classe de exportação de Pedidos de Resgate (Pedidos)
  */
-class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
+class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithEvents
 {
     protected $filters;
+
+    // 🔥 Armazena os telefones para aplicar máscara depois
+    protected $phones = [];
 
     public function __construct(array $filters = [])
     {
@@ -73,7 +77,6 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
             $query->where('r.created_at', '<=', Carbon::parse($this->filters['dateTo'])->endOfDay());
         }
 
-        // Filtro por categoria do produto
         if (!empty($this->filters['category']) && $this->filters['category'] !== 'all') {
             $categoryName = $this->filters['category'];
             $categoryIds = DB::table('categories')->where('name', $categoryName)->pluck('id');
@@ -81,7 +84,6 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
             if ($categoryIds->isNotEmpty()) {
                 $query->whereIn('p.guid', $categoryIds);
             } else {
-                // Se informou categoria mas não existe, força resultado vazio
                 $query->whereRaw('1 = 0');
             }
         }
@@ -108,16 +110,18 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
     {
         $config = json_decode($row->user_config, true) ?? [];
         $phone = $config['celular'] ?? $config['phone'] ?? $config['telefone'] ?? '';
-        
-        // Formatar telefone apenas com números, garantindo que o Excel trate como string nativa
+
+        // 🔥 Apenas números
         $phoneDigits = preg_replace('/\D/', '', $phone);
-        // Em vez de adicionar espaço, deixamos apenas os dígitos, mas usaremos WithColumnFormatting
+
+        // 🔥 Guarda para formatar depois
+        $this->phones[] = $phoneDigits;
 
         return [
             $row->id,
             $row->user_name,
             $row->user_email,
-            $phoneDigits, // Sem espaço aqui, vamos formatar a coluna inteira
+            is_numeric($phoneDigits) ? (int) $phoneDigits : null,
             $row->product_name,
             $row->product_category,
             (float) $row->points_used,
@@ -143,14 +147,48 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
     public function styles(Worksheet $sheet)
     {
         return [
-            1 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']]],
+            1 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '4F46E5']]
+            ],
         ];
     }
 
-    public function columnFormats(): array
+    // 🔥 Aqui acontece a mágica
+    public function registerEvents(): array
     {
         return [
-            'D' => NumberFormat::FORMAT_TEXT, // Força a coluna D (Telefone) a ser tratada como TEXTO puro no MS Excel
+            AfterSheet::class => function (AfterSheet $event) {
+
+                $sheet = $event->sheet->getDelegate();
+
+                foreach ($this->phones as $index => $phone) {
+
+                    $row = $index + 2; // linha 1 = cabeçalho
+                    $cell = 'D' . $row;
+
+                    if (strlen($phone) === 11) {
+                        // Celular
+                        $sheet->getStyle($cell)
+                            ->getNumberFormat()
+                            ->setFormatCode('(00) 00000-0000');
+
+                    } elseif (strlen($phone) === 10) {
+                        // Fixo
+                        $sheet->getStyle($cell)
+                            ->getNumberFormat()
+                            ->setFormatCode('(00) 0000-0000');
+
+                    } else {
+                        // fallback seguro
+                        $sheet->setCellValueExplicit(
+                            $cell,
+                            $phone,
+                            \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                        );
+                    }
+                }
+            },
         ];
     }
 }
