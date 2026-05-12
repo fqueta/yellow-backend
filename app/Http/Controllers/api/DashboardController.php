@@ -179,29 +179,36 @@ class DashboardController extends Controller
      */
     private function getClientRegistrationDataByRange(int|string|null $authorId, Carbon $start, Carbon $end): array
     {
+        // 1. Executa uma única query otimizada agrupada por data e status usando índices
+        $rawRecords = Client::selectRaw("
+                DATE(created_at) as date,
+                SUM(CASE WHEN status = 'actived' THEN 1 ELSE 0 END) as actived,
+                SUM(CASE WHEN status = 'inactived' THEN 1 ELSE 0 END) as inactived,
+                SUM(CASE WHEN status = 'pre_registred' THEN 1 ELSE 0 END) as pre_registred
+            ")
+            ->where('excluido', 'n')
+            ->whereBetween('created_at', [$start, $end])
+            ->when($authorId, function ($q) use ($authorId) {
+                $q->where('autor', $authorId);
+            })
+            ->groupBy(\Illuminate\Support\Facades\DB::raw('DATE(created_at)'))
+            ->get()
+            ->keyBy('date');
+
+        // 2. Preenche os dados diários, completando dias sem registros com valores zerados
         $data = [];
         $cursor = $start->copy()->startOfDay();
         $finish = $end->copy()->endOfDay();
 
         while ($cursor->lte($finish)) {
             $dateStr = $cursor->format('Y-m-d');
+            $record = $rawRecords->get($dateStr);
+
             $data[] = [
                 'date' => $dateStr,
-                'actived' => Client::whereDate('created_at', $dateStr)
-                    ->where('status', 'actived')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
-                'inactived' => Client::whereDate('created_at', $dateStr)
-                    ->where('status', 'inactived')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
-                'pre_registred' => Client::whereDate('created_at', $dateStr)
-                    ->where('status', 'pre_registred')
-                    ->where('excluido', 'n')
-                    ->when($authorId, function ($q) use ($authorId) { $q->where('autor', $authorId); })
-                    ->count(),
+                'actived' => $record ? (int)$record->actived : 0,
+                'inactived' => $record ? (int)$record->inactived : 0,
+                'pre_registred' => $record ? (int)$record->pre_registred : 0,
             ];
 
             $cursor->addDay()->startOfDay();

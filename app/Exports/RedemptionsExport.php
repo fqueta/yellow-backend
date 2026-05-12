@@ -2,7 +2,7 @@
 
 namespace App\Exports;
 
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -18,7 +18,7 @@ use Carbon\Carbon;
 /**
  * Classe de exportação de Pedidos de Resgate (Pedidos)
  */
-class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithEvents
+class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithEvents
 {
     protected $filters;
 
@@ -30,7 +30,7 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
         $this->filters = $filters;
     }
 
-    public function collection()
+    public function query()
     {
         $query = DB::table('redemptions as r')
             ->select(
@@ -88,7 +88,7 @@ class RedemptionsExport implements FromCollection, WithHeadings, WithMapping, Wi
             }
         }
 
-        return $query->orderBy('r.created_at', 'desc')->get();
+        return $query->orderBy('r.created_at', 'desc');
     }
 
     public function headings(): array

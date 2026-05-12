@@ -3,7 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Point;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -21,7 +21,7 @@ use Carbon\Carbon;
  * Utiliza o banco de dados (MariaDB Window Functions) para cálculos complexos,
  * evitando o problema de performance N+1.
  */
-class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
+class PointsExtractExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
 {
     protected $filters;
 
@@ -31,13 +31,12 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
     }
 
     /**
-     * Retorna a coleção de dados otimizada
+     * Retorna a query do relatório de extrato otimizada
      * 
      * BEST PRACTICE: O cálculo do saldo (balance_before/after) é feito via 
-     * Window Function (SUM OVER) no banco de dados. Isso permite processar 
-     * milhares de linhas em milissegundos.
+     * Window Function (SUM OVER) no banco de dados. Otimizado com push-down de filtros.
      */
-    public function collection()
+    public function query()
     {
         // 1. Definir a query base com o cálculo de histórico (Window Function)
         // Usamos withTrashed() para evitar que o Eloquent adicione automaticamente
@@ -71,19 +70,36 @@ class PointsExtractExport implements FromCollection, WithHeadings, WithMapping, 
                 SUM(p.valor) OVER (PARTITION BY p.client_id ORDER BY p.created_at ASC, p.id ASC) as running_balance_after
             ");
 
+        // 🔥 OTIMIZAÇÃO CRÍTICA (Push-down): Aplicar filtros de CLIENTE diretamente na inner query.
+        // Isso evita calcular window functions para a tabela inteira quando se filtra por cliente!
+        if (!empty($this->filters['user_id'])) {
+            $innerQuery->where('p.client_id', $this->filters['user_id']);
+        }
+
+        if (!empty($this->filters['search'])) {
+            $search = $this->filters['search'];
+            $innerQuery->where(function($q) use ($search) {
+                $q->where('c.name', 'like', "%{$search}%")
+                  ->orWhere('c.email', 'like', "%{$search}%")
+                  ->orWhere('c.cpf', 'like', "%{$search}%")
+                  ->orWhere('p.id', 'like', "%{$search}%")
+                  ->orWhere('p.pedido_id', 'like', "%{$search}%");
+            });
+        }
+
         // 2. Criar a query final que aplica os filtros do usuário sobre o histórico calculado
         // IMPORTANTE: Usamos withTrashed() novamente aqui para evitar o erro de coluna na outer query
         $query = Point::withTrashed()
             ->from(DB::raw("({$innerQuery->toSql()}) as history"))
             ->setBindings($innerQuery->getBindings());
 
-        // 3. Aplicar filtros dinâmicos (ID, Tipo, Busca, Datas)
+        // 3. Aplicar filtros dinâmicos restantes (ID, Tipo, Datas, etc.)
         $this->applyFilters($query);
 
         // 4. Ordenação final
         $query->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
-        return $query->get();
+        return $query;
     }
 
     /**

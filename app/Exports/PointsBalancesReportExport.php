@@ -3,7 +3,7 @@
 namespace App\Exports;
 
 use App\Models\User;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -17,7 +17,7 @@ use Carbon\Carbon;
 /**
  * Classe de exportação de Relatório de Saldo de Pontos por Cliente
  */
-class PointsBalancesReportExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
+class PointsBalancesReportExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting
 {
     protected $filters;
 
@@ -27,25 +27,32 @@ class PointsBalancesReportExport implements FromCollection, WithHeadings, WithMa
     }
 
     /**
-     * Retorna a coleção de usuários com seus saldos atuais calculados no banco
+     * Retorna a query do relatório otimizada
      */
-    public function collection()
+    public function query()
     {
         $orderBy = $this->filters['order_by'] ?? 'name';
         $order = $this->filters['order'] ?? 'asc';
 
-        // Query otimizada para buscar saldo total de cada cliente em uma única passagem
+        // Query otimizada para buscar saldo total de cada cliente em uma única passagem via LEFT JOIN
         $query = DB::table('users as u')
+            ->leftJoin('points as p', function ($join) {
+                $join->on('p.client_id', '=', 'u.id')
+                     ->where('p.excluido', '=', 'n')
+                     ->where('p.deletado', '=', 'n')
+                     ->where('p.status', '!=', 'cancelado');
+            })
             ->select(
                 'u.id',
                 'u.name',
                 'u.email',
                 'u.cpf',
                 'u.created_at',
-                DB::raw("(SELECT COALESCE(SUM(valor), 0) FROM points WHERE client_id = u.id AND excluido = 'n' AND deletado = 'n' AND status != 'cancelado') as total_balance")
+                DB::raw('COALESCE(SUM(p.valor), 0) as total_balance')
             )
             ->where('u.excluido', 'n')
-            ->where('u.deletado', 'n');
+            ->where('u.deletado', 'n')
+            ->groupBy('u.id', 'u.name', 'u.email', 'u.cpf', 'u.created_at');
 
         // Aplicar busca global
         if (!empty($this->filters['search'])) {
@@ -64,7 +71,7 @@ class PointsBalancesReportExport implements FromCollection, WithHeadings, WithMa
             $query->orderBy('u.' . $orderBy, $order);
         }
 
-        return $query->get();
+        return $query;
     }
 
     public function headings(): array
