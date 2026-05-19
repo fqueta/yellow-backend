@@ -108,7 +108,27 @@ class ClientController extends Controller
         $clients = $query->paginate($perPage);
         // Converter config para array em cada cliente
         try {
-            $clients->getCollection()->transform(function ($client) {
+            $clientCollection = $clients->getCollection();
+            $clientIds = $clientCollection->pluck('id')->unique()->filter()->toArray();
+            
+            // OTIMIZAÇÃO: Pré-carregar metadados 'is_alloyal' em uma única query (Corte de N+1)
+            $isAlloyals = [];
+            if (!empty($clientIds)) {
+                $isAlloyals = \Illuminate\Support\Facades\DB::table('usermeta')
+                    ->whereIn('user_id', $clientIds)
+                    ->where('meta_key', 'is_alloyal')
+                    ->pluck('meta_value', 'user_id')
+                    ->toArray();
+            }
+
+            // OTIMIZAÇÃO: Pré-carregar nomes dos autores (parceiros) em uma única query (Corte de N+1)
+            $authorIds = $clientCollection->pluck('autor')->unique()->filter()->toArray();
+            $authors = [];
+            if (!empty($authorIds)) {
+                $authors = User::whereIn('id', $authorIds)->pluck('name', 'id')->toArray();
+            }
+
+            $clientCollection->transform(function ($client) use ($isAlloyals, $authors) {
                 if (is_string($client->config)) {
                     $configArr = json_decode($client->config, true) ?? [];
                     if (is_array($configArr)) {
@@ -124,9 +144,10 @@ class ClientController extends Controller
                 } else {
                     $client->config = is_array($client->config) ? $client->config : [];
                 }
-                $client->is_alloyal = Qlib::get_usermeta($client->id,'is_alloyal');
-                //Exibir o nome do parceiro no lugar do autor
-                $client->autor_name = $client->autor ? User::find($client->autor)->name : '';
+                
+                $client->is_alloyal = $isAlloyals[$client->id] ?? false;
+                $client->autor_name = $authors[$client->autor] ?? '';
+                
                 return $client;
             });
         } catch (\Exception $e) {
@@ -153,11 +174,18 @@ class ClientController extends Controller
             });
         }
 
+        // OTIMIZAÇÃO: Obter as contagens agrupadas por status em uma única query (Corte de 4 queries para 1)
+        $statsRaw = (clone $statsBase)
+            ->select('status', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
         $global_stats = [
-            'total' => (clone $statsBase)->count(),
-            'actived' => (clone $statsBase)->where('status', 'actived')->count(),
-            'inactived' => (clone $statsBase)->where('status', 'inactived')->count(),
-            'pre_registred' => (clone $statsBase)->where('status', 'pre_registred')->count(),
+            'total' => array_sum($statsRaw),
+            'actived' => $statsRaw['actived'] ?? 0,
+            'inactived' => $statsRaw['inactived'] ?? 0,
+            'pre_registred' => $statsRaw['pre_registred'] ?? 0,
         ];
 
         if($request->segment(4) == 'registred'){

@@ -193,6 +193,9 @@ class OptionController extends Controller
                 'updated_at'      => now(),
             ]
         );
+        if (isset($validated['url'])) {
+            Qlib::clear_option_cache($validated['url']);
+        }
         $ret['data'] = $option;
         $ret['message'] = 'Opção criada com sucesso';
         $ret['status'] = 201;
@@ -233,6 +236,7 @@ class OptionController extends Controller
                 //     $data_salv
                 // );
                 $option[$key] = Qlib::update_tab('options', $data_salv, "WHERE url = '$key'");
+                Qlib::clear_option_cache($key);
             }
         }
         // dd($option);

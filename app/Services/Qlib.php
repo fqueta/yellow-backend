@@ -32,6 +32,7 @@ use App\Models\Product;
 use App\Models\ProductUnit;
 class Qlib
 {
+    static protected $optionCache = [];
     static $RAIZ;
     public function __construct(){
         global $tab11,$tab12,$tab50,$tab55;
@@ -136,44 +137,90 @@ class Qlib
         return $idade;
     }
     static public function qoption($valor = false, $type = false){
-        //type é o tipo de respsta
+        //type é o tipo de resposta
 		$ret = false;
 		if($valor){
-            $query = Option::where('url','=',$valor);
-            try {
-                $conn = (new Option)->getConnectionName();
-                $schema = Schema::connection($conn);
-                if ($schema->hasColumn('options','excluido')) {
-                    $query->where('excluido','=', 'n');
-                }
-                if ($schema->hasColumn('options','deletado')) {
-                    $query->where('deletado','=', 'n');
-                }
-                if ($schema->hasColumn('options','ativo')) {
-                    $query->where('ativo','=', 's');
-                }
-            } catch (\Throwable $e) {
+            $cacheKey = $valor . '_' . ($type ?? 'default');
+            if (isset(self::$optionCache[$cacheKey])) {
+                return self::$optionCache[$cacheKey];
             }
-            $result = $query->select('value')->first();
-            //    ->toArray();
-            //    dd($valor,$result['value']);
-               if(isset($result['value'])) {
-                   // output data of each row
-                   $ret = $result['value'];
-					// if($valor=='urlroot'){
-					// 	$ret = str_replace('/home/ctloja/public_html/lojas/','/home/ctdelive/lojas/',$ret);
-					// }
+
+            $tenantId = function_exists('tenant') && tenant() ? tenant('id') : 'central';
+            $persistentKey = "tenant_{$tenantId}_option_{$valor}_" . ($type ?? 'default');
+
+            // Ignora o bootstrapper de tags da tenancy para suportar drivers que não aceitam tagging (como file/database)
+            $store = \Illuminate\Support\Facades\Cache::driver()->getStore();
+            $cache = new \Illuminate\Cache\Repository($store);
+
+            $ret = $cache->remember($persistentKey, now()->addHours(12), function() use ($valor, $type) {
+                $query = Option::where('url','=',$valor);
+                try {
+                    // Para evitar consultas repetidas ao INFORMATION_SCHEMA (hasColumn),
+                    // carregamos as colunas da tabela uma única vez nesta requisição e verificamos em memória.
+                    static $columnsInfo = null;
+                    if ($columnsInfo === null) {
+                        try {
+                            $conn = (new Option)->getConnectionName();
+                            $columnsInfo = Schema::connection($conn)->getColumnListing('options');
+                        } catch (\Throwable $e) {
+                            $columnsInfo = [];
+                        }
+                    }
+
+                    if (in_array('excluido', $columnsInfo)) {
+                        $query->where('excluido','=', 'n');
+                    }
+                    if (in_array('deletado', $columnsInfo)) {
+                        $query->where('deletado','=', 'n');
+                    }
+                    if (in_array('ativo', $columnsInfo)) {
+                        $query->where('ativo','=', 's');
+                    }
+                } catch (\Throwable $e) {
+                }
+                
+                $result = $query->select('value')->first();
+                $val = null;
+                if(isset($result['value'])) {
+                    $val = $result['value'];
                     if($type=='array'){
-                        $ret = self::lib_json_array($ret);
+                        $val = self::lib_json_array($val);
                     }
                     if($type=='json'){
-                        $ret = self::lib_array_json($ret);
+                        $val = self::lib_array_json($val);
                     }
-			    }
-			//}
+                }
+                return $val;
+            });
+            
+            self::$optionCache[$cacheKey] = $ret;
 		}
 		return $ret;
 	}
+
+    /**
+     * Limpa o cache estático e persistente de uma opção específica.
+     */
+    static public function clear_option_cache($url) {
+        if (!$url) return;
+        $tenantId = function_exists('tenant') && tenant() ? tenant('id') : 'central';
+        
+        $cacheKeys = [
+            $url . '_default',
+            $url . '_array',
+            $url . '_json'
+        ];
+        foreach ($cacheKeys as $key) {
+            unset(self::$optionCache[$key]);
+        }
+        
+        $store = \Illuminate\Support\Facades\Cache::driver()->getStore();
+        $cache = new \Illuminate\Cache\Repository($store);
+
+        $cache->forget("tenant_{$tenantId}_option_{$url}_default");
+        $cache->forget("tenant_{$tenantId}_option_{$url}_array");
+        $cache->forget("tenant_{$tenantId}_option_{$url}_json");
+    }
   static function dtBanco($data) {
 			$data = trim($data);
 			if (strlen($data) != 10)
@@ -2792,7 +2839,7 @@ class Qlib
      * @return json
      */
     static function get_category_by_id($id){
-        $category = Category::findOrFail($id);
+        $category = Category::find($id);
         return $category;
     }
     /**

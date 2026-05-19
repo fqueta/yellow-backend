@@ -31,9 +31,6 @@ class Option extends Model
     public $incrementing = false;   // 👈 precisa porque o id não é int
     protected $keyType = 'string';  // 👈 precisa porque UUID é string
 
-    /**
-     * Escopo global para filtrar apenas registros não excluídos
-     */
     protected static function booted()
     {
         static::addGlobalScope('active', function ($query) {
@@ -48,6 +45,18 @@ class Option extends Model
                     });
                 }
             } catch (\Throwable $e) {
+            }
+        });
+
+        static::saved(function ($option) {
+            if ($option->url) {
+                \App\Services\Qlib::clear_option_cache($option->url);
+            }
+        });
+
+        static::deleted(function ($option) {
+            if ($option->url) {
+                \App\Services\Qlib::clear_option_cache($option->url);
             }
         });
     }

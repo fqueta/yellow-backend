@@ -263,6 +263,28 @@ class RedeemController extends Controller
                 $query->where('product_id', $request->input('product_id'));
             }
 
+            // Filtro de busca (nome do cliente, email, cpf, nome do produto ou ID)
+            if ($request->filled('search')) {
+                $search = $request->input('search');
+                // Se o ID for buscado com prefixo (ex: R00004), limpa para buscar o ID numérico inteiro no banco
+                $cleanSearchId = preg_replace('/\D/', '', $search);
+
+                $query->where(function($q) use ($search, $cleanSearchId) {
+                    if (!empty($cleanSearchId)) {
+                        $q->where('id', (int)$cleanSearchId);
+                    }
+                    $q->orWhere('notes', 'like', "%{$search}%")
+                      ->orWhereHas('user', function($userQuery) use ($search) {
+                          $userQuery->where('name', 'like', "%{$search}%")
+                                    ->orWhere('email', 'like', "%{$search}%")
+                                    ->orWhere('cpf', 'like', "%{$search}%");
+                      })
+                      ->orWhereHas('product', function($productQuery) use ($search) {
+                          $productQuery->where('post_title', 'like', "%{$search}%");
+                      });
+                });
+            }
+
             // Filtro por período
             if (!empty($dateFrom)) {
                 $query->whereDate('created_at', '>=', $dateFrom);
