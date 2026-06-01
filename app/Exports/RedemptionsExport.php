@@ -64,6 +64,7 @@ class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithSty
             $query->where(function($q) use ($search) {
                 $q->where('u.name', 'like', "%{$search}%")
                   ->orWhere('u.email', 'like', "%{$search}%")
+                  ->orWhere('u.cpf', 'like', "%{$search}%")
                   ->orWhere('p.post_title', 'like', "%{$search}%")
                   ->orWhere('r.id', 'like', "%{$search}%");
             });
@@ -96,6 +97,7 @@ class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithSty
         return [
             'ID',
             'Cliente',
+            'CPF',
             'E-mail',
             'Telefone',
             'Produto',
@@ -120,6 +122,7 @@ class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithSty
         return [
             $row->id,
             $row->user_name,
+            $this->formatCpf($row->user_cpf),
             $row->user_email,
             is_numeric($phoneDigits) ? (int) $phoneDigits : null,
             $row->product_name,
@@ -144,6 +147,23 @@ class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithSty
         return $labels[$status] ?? $status;
     }
 
+    /**
+     * Formata CPF para exibição no arquivo exportado.
+     */
+    protected function formatCpf($cpf)
+    {
+        $digits = preg_replace('/\D/', '', (string) $cpf);
+
+        if (strlen($digits) !== 11) {
+            return $cpf ?: null;
+        }
+
+        return substr($digits, 0, 3) . '.' .
+            substr($digits, 3, 3) . '.' .
+            substr($digits, 6, 3) . '-' .
+            substr($digits, 9, 2);
+    }
+
     public function styles(Worksheet $sheet)
     {
         return [
@@ -165,7 +185,7 @@ class RedemptionsExport implements FromQuery, WithHeadings, WithMapping, WithSty
                 foreach ($this->phones as $index => $phone) {
 
                     $row = $index + 2; // linha 1 = cabeçalho
-                    $cell = 'D' . $row;
+                    $cell = 'E' . $row;
 
                     if (strlen($phone) === 11) {
                         // Celular
